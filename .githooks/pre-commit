@@ -1,0 +1,29 @@
+#!/bin/bash
+# pre-commit — 스테이징된 Swift 파일에 SwiftLint strict 검사.
+# 위반이 있으면 커밋을 차단한다 (StyleShare 스타일 가이드 강제).
+# 활성화: Scripts/setup.sh 실행 (git config core.hooksPath .githooks)
+set -u
+
+STAGED_SWIFT_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.swift$' || true)
+if [ -z "$STAGED_SWIFT_FILES" ]; then
+  exit 0
+fi
+
+if ! command -v swiftlint >/dev/null 2>&1; then
+  echo "error: swiftlint가 설치되어 있지 않습니다. 'brew install swiftlint' 후 다시 커밋하세요." >&2
+  exit 1
+fi
+
+COUNT=0
+while IFS= read -r FILE; do
+  export "SCRIPT_INPUT_FILE_${COUNT}=${FILE}"
+  COUNT=$((COUNT + 1))
+done <<< "$STAGED_SWIFT_FILES"
+export SCRIPT_INPUT_FILE_COUNT=$COUNT
+
+if ! swiftlint lint --strict --quiet --use-script-input-files; then
+  echo "" >&2
+  echo "commit 차단: SwiftLint 위반이 있습니다. 위 메시지를 수정한 뒤 다시 커밋하세요." >&2
+  echo "(자동 수정 가능한 규칙은 'swiftlint --fix' 사용)" >&2
+  exit 1
+fi

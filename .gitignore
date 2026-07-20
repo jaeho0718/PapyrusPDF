@@ -6,3 +6,5 @@ DerivedData/
 .swiftpm/configuration/registries.json
 .swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
 .netrc
+# 에이전트 중간 산출물 (설계/리뷰 문서) — 로컬 보존, 커밋 제외
+_workspace/

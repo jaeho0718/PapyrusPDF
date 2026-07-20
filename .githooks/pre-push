@@ -1,0 +1,21 @@
+#!/bin/bash
+# pre-push — main/develop 브랜치로의 직접 push를 차단한다.
+# develop/main 병합은 반드시 Pull Request를 경유해야 한다 (gitflow 규칙).
+# 원격 브랜치 보호의 로컬 보완 장치이며, 불가피한 경우에만
+# PAPYRUS_ALLOW_PROTECTED_PUSH=1 로 우회할 수 있다.
+set -u
+
+if [ "${PAPYRUS_ALLOW_PROTECTED_PUSH:-0}" = "1" ]; then
+  exit 0
+fi
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  BRANCH="${remote_ref#refs/heads/}"
+  if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+    echo "push 차단: '$BRANCH' 브랜치에는 직접 push할 수 없습니다." >&2
+    echo "feature/* 브랜치를 push한 뒤 Pull Request로 병합하세요. (gitflow)" >&2
+    exit 1
+  fi
+done
+
+exit 0
