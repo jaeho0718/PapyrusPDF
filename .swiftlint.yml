@@ -1,0 +1,65 @@
+# SwiftLint 설정 — StyleShare swift-style-guide 기반
+# https://github.com/StyleShare/swift-style-guide
+# 규칙 근거는 .claude/skills/swift-style/references/styleshare-rules.md 참조
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - .swiftpm
+
+opt_in_rules:
+  # StyleShare: import는 알파벳 순 정렬
+  - sorted_imports
+  # StyleShare: 클로저 표현 공백
+  - closure_spacing
+  # StyleShare: 연산자 주변 공백
+  - operator_usage_whitespace
+  # 매 작업 DocC 문서화 규칙 — 공개 API에 /// 문서 주석 강제
+  - missing_docs
+  # StyleShare: 들여쓰기는 2칸 스페이스
+  - indentation_width
+  # 빈 줄에 공백 금지 보완
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+
+analyzer_rules:
+  # StyleShare: 클래스·구조체 내부에서 self 명시 (swiftlint analyze 실행 시 검사)
+  - explicit_self
+
+# StyleShare: 한 줄은 최대 99자
+line_length:
+  warning: 99
+  error: 120
+  ignores_urls: true
+
+# StyleShare: 들여쓰기 2칸
+indentation_width:
+  indentation_width: 2
+
+# 공개 API 문서화 누락은 오류로 취급 (매 작업 DocC 문서화 규칙)
+missing_docs:
+  error:
+    - public
+    - open
+
+identifier_name:
+  min_length: 2
+  excluded:
+    - x
+    - y
+    - z
+    - i
+    - j
+    - id
+    - lhs
+    - rhs
+
+trailing_whitespace:
+  ignores_empty_lines: false
+
+# StyleShare: () -> Void, [T], [T: U] 표기 — void_return / syntactic_sugar 기본 규칙이 처리
+# StyleShare: 파일 끝 빈 줄 — trailing_newline 기본 규칙이 처리
+# StyleShare: 콜론 오른쪽만 공백 — colon 기본 규칙이 처리

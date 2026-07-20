@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+jobs:
+  # 브랜치 보호의 required status check 이름과 일치해야 한다 (lint-build-test)
+  lint-build-test:
+    name: lint-build-test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          swift --version
+
+      - name: Install SwiftLint (if missing)
+        run: command -v swiftlint || brew install swiftlint
+
+      - name: SwiftLint (strict)
+        run: swiftlint lint --strict --reporter github-actions-logging
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
