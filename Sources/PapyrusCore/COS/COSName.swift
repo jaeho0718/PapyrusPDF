@@ -50,3 +50,39 @@ extension COSName {
   /// `/BitsPerComponent`.
   package static let bitsPerComponent: COSName = "BitsPerComponent"
 }
+
+/// M2에서 필요한 표준 이름 상수 (xref/ObjStm/암호화 감지).
+extension COSName {
+  /// `/Root`.
+  package static let root: COSName = "Root"
+
+  /// `/Prev`.
+  package static let prev: COSName = "Prev"
+
+  /// `/XRefStm`.
+  package static let xRefStm: COSName = "XRefStm"
+
+  /// `/Size`.
+  package static let size: COSName = "Size"
+
+  /// `/Index`.
+  package static let index: COSName = "Index"
+
+  /// `/W`.
+  package static let wKey: COSName = "W"
+
+  /// `/Encrypt`.
+  package static let encrypt: COSName = "Encrypt"
+
+  /// `/First`.
+  package static let first: COSName = "First"
+
+  /// `/N`.
+  package static let nKey: COSName = "N"
+
+  /// `/ObjStm`.
+  package static let objStm: COSName = "ObjStm"
+
+  /// `/Catalog`.
+  package static let catalog: COSName = "Catalog"
+}
