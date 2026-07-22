@@ -27,22 +27,28 @@ package struct PDFFixtureBuilder: Sendable {
   /// xref 기록 방식. v0 기본이자 유일한 값은 `.classicTable`.
   package var xrefStyle: XRefStyle
 
+  /// 전 페이지가 공유하는 콘텐츠 스트림. `nil`이면 v0와 동일한 바이트를 산출한다.
+  package var contentStream: ContentStreamSpec?
+
   /// 빌더를 생성한다.
   /// - Parameters:
   ///   - pageCount: 생성할 페이지 수 (기본 1).
   ///   - pageWidth: 페이지 MediaBox 폭 (기본 612).
   ///   - pageHeight: 페이지 MediaBox 높이 (기본 792).
   ///   - xrefStyle: xref 기록 방식 (기본 `.classicTable`).
+  ///   - contentStream: 전 페이지가 공유하는 콘텐츠 스트림 (기본 `nil` — v0와 바이트 동일).
   package init(
     pageCount: Int = 1,
     pageWidth: Double = 612,
     pageHeight: Double = 792,
-    xrefStyle: XRefStyle = .classicTable
+    xrefStyle: XRefStyle = .classicTable,
+    contentStream: ContentStreamSpec? = nil
   ) {
     self.pageCount = pageCount
     self.pageWidth = pageWidth
     self.pageHeight = pageHeight
     self.xrefStyle = xrefStyle
+    self.contentStream = contentStream
   }
 
   /// 설정대로 PDF 바이트를 생성한다.
@@ -57,11 +63,31 @@ package struct PDFFixtureBuilder: Sendable {
     var writer = PDFByteWriter()
     var objectOffsets: [Int: Int] = [:]
 
+    // 객체 번호 배치(결정성): Catalog=1, Pages=2, 페이지=3...N+2, 공유 콘텐츠 스트림=N+3,
+    // /Length 간접 시 정수 객체=N+4. contentStream이 nil이면 이 두 객체는 존재하지 않는다.
+    let contentsObjectNumber = self.contentStream != nil ? self.pageCount + 3 : nil
+    let needsLengthObject = self.contentStream?.lengthStyle == .indirect
+    let lengthObjectNumber = needsLengthObject ? self.pageCount + 4 : nil
+
     self.writeHeader(into: &writer)
-    self.writeBody(into: &writer, objectOffsets: &objectOffsets)
+    self.writeBody(
+      into: &writer, objectOffsets: &objectOffsets, contentsObjectNumber: contentsObjectNumber
+    )
+    if let contentStream, let contentsObjectNumber {
+      self.writeContentStreamObject(
+        into: &writer, objectOffsets: &objectOffsets, objectNumber: contentsObjectNumber,
+        lengthObjectNumber: lengthObjectNumber, spec: contentStream
+      )
+    }
 
     let xrefOffset = writer.offset
-    let totalObjects = self.pageCount + 3
+    var totalObjects = self.pageCount + 3
+    if contentsObjectNumber != nil {
+      totalObjects += 1
+    }
+    if lengthObjectNumber != nil {
+      totalObjects += 1
+    }
 
     self.writeXRefTable(
       into: &writer,
@@ -86,9 +112,13 @@ package struct PDFFixtureBuilder: Sendable {
   }
 
   /// Catalog, Pages, 페이지 객체 N개를 순서대로 기록하며 각 시작 오프셋을 저장한다.
+  ///
+  /// `contentsObjectNumber`가 있으면 각 페이지 딕셔너리에 `/Contents N 0 R`를 추가한다
+  /// (`nil`이면 v0와 바이트 동일 — 이 매개변수 자체가 조건부로만 출력에 영향을 준다).
   private func writeBody(
     into writer: inout PDFByteWriter,
-    objectOffsets: inout [Int: Int]
+    objectOffsets: inout [Int: Int],
+    contentsObjectNumber: Int?
   ) {
     objectOffsets[1] = writer.offset
     writer.writeLine("1 0 obj")
@@ -103,14 +133,98 @@ package struct PDFFixtureBuilder: Sendable {
 
     let widthText = Self.formatCoordinate(self.pageWidth)
     let heightText = Self.formatCoordinate(self.pageHeight)
+    let contentsEntry = contentsObjectNumber.map { " /Contents \($0) 0 R" } ?? ""
     for index in 0..<self.pageCount {
       let objectNumber = 3 + index
       objectOffsets[objectNumber] = writer.offset
       writer.writeLine("\(objectNumber) 0 obj")
+      let mediaBox = "[0 0 \(widthText) \(heightText)]"
       writer.writeLine(
-        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 \(widthText) \(heightText)] >>"
+        "<< /Type /Page /Parent 2 0 R /MediaBox \(mediaBox)\(contentsEntry) >>"
       )
       writer.writeLine("endobj")
+    }
+  }
+
+  /// 공유 콘텐츠 스트림 객체(및 `/Length`가 간접이면 그 정수 객체)를 기록한다.
+  private func writeContentStreamObject(
+    into writer: inout PDFByteWriter,
+    objectOffsets: inout [Int: Int],
+    objectNumber: Int,
+    lengthObjectNumber: Int?,
+    spec: ContentStreamSpec
+  ) {
+    let encoded = spec.encodings.reduce(spec.body) { partial, encoding in
+      Self.applyEncoding(encoding, to: partial)
+    }
+    let filterNames = spec.encodings.reversed().map(Self.filterName(for:))
+    let filterEntry = filterNames.isEmpty ? "" : " /Filter [\(filterNames.joined(separator: " "))]"
+    let length = Self.declaredLength(for: encoded, style: spec.lengthStyle)
+    let lengthEntry: String
+    switch spec.lengthStyle {
+    case .direct, .directWrong:
+      lengthEntry = "/Length \(length)"
+    case .indirect:
+      lengthEntry = "/Length \(lengthObjectNumber ?? 0) 0 R"
+    }
+
+    objectOffsets[objectNumber] = writer.offset
+    writer.writeLine("\(objectNumber) 0 obj")
+    writer.writeLine("<< \(lengthEntry)\(filterEntry) >>")
+    writer.write("stream")
+    writer.write(rawBytes: spec.streamEOL.bytes)
+    writer.write(rawBytes: [UInt8](encoded))
+    writer.write(rawBytes: [0x0A])
+    writer.writeLine("endstream")
+    writer.writeLine("endobj")
+
+    if let lengthObjectNumber {
+      objectOffsets[lengthObjectNumber] = writer.offset
+      writer.writeLine("\(lengthObjectNumber) 0 obj")
+      writer.writeLine("\(encoded.count)")
+      writer.writeLine("endobj")
+    }
+  }
+
+  /// 인코딩 하나를 순방향(인코딩 방향)으로 적용한다.
+  private static func applyEncoding(
+    _ encoding: ContentStreamSpec.Encoding, to data: Data
+  ) -> Data {
+    switch encoding {
+    case .flate:
+      return PDFFilterEncoders.flate(data)
+    case .asciiHex:
+      return PDFFilterEncoders.asciiHex(data)
+    case .ascii85:
+      return PDFFilterEncoders.ascii85(data)
+    case .runLength:
+      return PDFFilterEncoders.runLength(data)
+    }
+  }
+
+  /// 인코딩 종류에 대응하는 PDF 표준 필터 이름.
+  private static func filterName(for encoding: ContentStreamSpec.Encoding) -> String {
+    switch encoding {
+    case .flate:
+      return "/FlateDecode"
+    case .asciiHex:
+      return "/ASCIIHexDecode"
+    case .ascii85:
+      return "/ASCII85Decode"
+    case .runLength:
+      return "/RunLengthDecode"
+    }
+  }
+
+  /// `/Length`에 기록할 정수 값을 결정한다 (`.directWrong`은 의도적으로 어긋난 값).
+  private static func declaredLength(
+    for encoded: Data, style: ContentStreamSpec.LengthStyle
+  ) -> Int {
+    switch style {
+    case .direct, .indirect:
+      return encoded.count
+    case let .directWrong(delta):
+      return encoded.count + delta
     }
   }
 
@@ -127,7 +241,7 @@ package struct PDFFixtureBuilder: Sendable {
     writer.write(rawBytes: [0x0D, 0x0A])
 
     // pageCount >= 0 (build()의 precondition)이므로 highestObjectNumber >= 2 — 범위는 항상 유효하다.
-    let highestObjectNumber = self.pageCount + 2
+    let highestObjectNumber = totalObjects - 1
     for objectNumber in 1...highestObjectNumber {
       let offset = objectOffsets[objectNumber] ?? 0
       writer.write(Self.xrefEntry(offset: offset, generation: 0, type: "n"))

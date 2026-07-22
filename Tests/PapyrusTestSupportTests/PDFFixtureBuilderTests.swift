@@ -234,6 +234,103 @@ struct PDFFixtureBuilderTests {
     #expect(document.numberOfPages == pageCount)
   }
   #endif
+
+  // MARK: F11 — 콘텐츠 스트림 v1 확장
+
+  /// F11: `contentStream == nil`이면(기본값이든 명시든) v0와 완전히 동일한 바이트를
+  /// 산출한다 — 기존 F1–F10 골든 테스트가 무수정으로 계속 통과함으로써도 보증된다.
+  @Test(arguments: [0, 1, 5])
+  func contentStreamNilMatchesV0Bytes(pageCount: Int) {
+    let withDefaultParam = PDFFixtureBuilder(pageCount: pageCount).build()
+    let withExplicitNil = PDFFixtureBuilder(pageCount: pageCount, contentStream: nil).build()
+    #expect(withDefaultParam.data == withExplicitNil.data)
+  }
+
+  /// F11: 콘텐츠 스트림 설정 시 신규 객체(N+3, `/Length` 간접이면 N+4)가
+  /// `objectOffsets`에 포함되고 각 오프셋이 실제 `N 0 obj` 시작을 가리킨다.
+  @Test func contentStreamAddsObjectOffsetsForNewObjects() throws {
+    let pageCount = 2
+    let fixture = PDFFixtureBuilder(
+      pageCount: pageCount,
+      contentStream: .init(body: Data("BT ET".utf8), lengthStyle: .indirect)
+    ).build()
+
+    #expect(Set(fixture.objectOffsets.keys) == Set(1...(pageCount + 4)))
+    #expect(fixture.objectCount == pageCount + 4)
+
+    let contentsObjectNumber = pageCount + 3
+    let contentsOffset = try #require(fixture.objectOffsets[contentsObjectNumber])
+    let contentsPrefix = Array("\(contentsObjectNumber) 0 obj".utf8)
+    let contentsActual = fixture.data[contentsOffset..<(contentsOffset + contentsPrefix.count)]
+    #expect(Array(contentsActual) == contentsPrefix)
+
+    let lengthObjectNumber = pageCount + 4
+    let lengthOffset = try #require(fixture.objectOffsets[lengthObjectNumber])
+    let lengthPrefix = Array("\(lengthObjectNumber) 0 obj".utf8)
+    let lengthActual = fixture.data[lengthOffset..<(lengthOffset + lengthPrefix.count)]
+    #expect(Array(lengthActual) == lengthPrefix)
+  }
+
+  /// F11: 각 페이지 딕셔너리에 `/Contents (N+3) 0 R` 참조가 정확히 페이지 수만큼 존재한다.
+  @Test func contentStreamAddsContentsReferenceToEachPage() {
+    let pageCount = 3
+    let fixture = PDFFixtureBuilder(
+      pageCount: pageCount, contentStream: .init(body: Data("BT ET".utf8))
+    ).build()
+    let expected = "/Contents \(pageCount + 3) 0 R"
+
+    var searchStart = 0
+    var found = 0
+    while let index = offset(of: expected, in: fixture.data, from: searchStart) {
+      found += 1
+      searchStart = index + 1
+    }
+    #expect(found == pageCount)
+  }
+
+  /// F11: `/Length` 기록 방식별 바이트 형태 — direct는 정확한 정수, indirect는
+  /// `N 0 R`, directWrong은 실제 길이와 다른 정수를 기록한다.
+  @Test func lengthStyleReflectsDeclaredBytes() {
+    let body = Data("BT ET".utf8)
+
+    let direct = PDFFixtureBuilder(
+      pageCount: 1, contentStream: .init(body: body, lengthStyle: .direct)
+    ).build()
+    #expect(offset(of: "/Length \(body.count) ", in: direct.data) != nil)
+
+    let indirect = PDFFixtureBuilder(
+      pageCount: 1, contentStream: .init(body: body, lengthStyle: .indirect)
+    ).build()
+    #expect(offset(of: "/Length 5 0 R", in: indirect.data) != nil)
+
+    let wrong = PDFFixtureBuilder(
+      pageCount: 1, contentStream: .init(body: body, lengthStyle: .directWrong(delta: 7))
+    ).build()
+    #expect(offset(of: "/Length \(body.count + 7) ", in: wrong.data) != nil)
+  }
+
+  // MARK: F12 — PDFFilterEncoders 자가 검증
+
+  /// F12: `PDFFilterEncoders.flate` 산출물이 유효한 zlib 헤더(CM=8, FCHECK 정합,
+  /// FDICT 미설정)로 시작한다.
+  @Test func flateEncoderProducesValidZlibHeader() throws {
+    let encoded = PDFFilterEncoders.flate(Data("hello".utf8))
+    #expect(encoded.count >= 6)
+    let b0 = try #require(encoded.first)
+    let b1 = try #require(encoded.dropFirst().first)
+    #expect(b0 & 0x0F == 8)
+    #expect((UInt16(b0) << 8 | UInt16(b1)) % 31 == 0)
+    #expect(b1 & 0x20 == 0)
+  }
+
+  /// F12: 트레일러 4바이트가 원문의 Adler-32와 정확히 일치한다 (수계산 대조).
+  @Test func flateEncoderAppendsCorrectAdler32Checksum() {
+    let original = Data("The quick brown fox".utf8)
+    let encoded = PDFFilterEncoders.flate(original)
+    let trailer = encoded.suffix(4)
+    let checksum = trailer.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+    #expect(checksum == adler32Reference(original))
+  }
 }
 
 // MARK: - 테스트 전용 바이트 헬퍼
@@ -266,4 +363,16 @@ private func zeroPadded(_ value: Int, width: Int) -> String {
     return text
   }
   return String(repeating: "0", count: width - text.count) + text
+}
+
+/// RFC 1950 Adler-32를 독립적으로 재계산한다 (인코더 내부 구현과 대조 독립성 유지).
+private func adler32Reference(_ data: Data) -> UInt32 {
+  var lowSum: UInt32 = 1
+  var highSum: UInt32 = 0
+  let modAdler: UInt32 = 65_521
+  for byte in data {
+    lowSum = (lowSum + UInt32(byte)) % modAdler
+    highSum = (highSum + lowSum) % modAdler
+  }
+  return (highSum << 16) | lowSum
 }

@@ -22,7 +22,7 @@ let package = Package(
     // ── 테스트 지원 (제품 비노출, 의존성 없음) ──
     .target(name: "PapyrusTestSupport"),
 
-    // ── 테스트 타겟 (M0 범위: 2개) ──
+    // ── 테스트 타겟 ──
     .testTarget(
       name: "PapyrusTests",
       dependencies: ["Papyrus", "PapyrusRendering", "PapyrusUI"]
@@ -30,6 +30,10 @@ let package = Package(
     .testTarget(
       name: "PapyrusTestSupportTests",
       dependencies: ["PapyrusTestSupport"]
+    ),
+    .testTarget(
+      name: "PapyrusCoreTests",
+      dependencies: ["PapyrusCore", "PapyrusTestSupport"]
     )
   ],
   swiftLanguageModes: [.v6]
