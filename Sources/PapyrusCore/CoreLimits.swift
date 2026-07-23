@@ -34,4 +34,28 @@ package enum CoreLimits {
 
   /// `resolve(_:)`가 따라가는 참조 사슬 최대 길이 (R→R→… 순환 가드).
   package static let maxReferenceChainLength = 32
+
+  /// 평탄화가 수용하는 최대 페이지 수 (손상 트리의 폭주 가드).
+  package static let maxPages = 1_000_000
+
+  /// 페이지 트리 최대 깊이 (Kids 중첩).
+  package static let maxPageTreeDepth = 256
+
+  /// /Count 힌트로 예약하는 용량 상한 (거짓 /Count의 과대 할당 가드).
+  package static let maxPageCountHint = 10_000
+
+  /// 목차 항목 수 상한 (ARCHITECTURE.md: 5만 캡).
+  package static let maxOutlineItems = 50_000
+
+  /// 목차 트리 최대 깊이 (재귀 하강 캡 — 입력 비례 재귀 금지의 상수 상한).
+  package static let maxOutlineDepth = 64
+
+  /// 네임 트리 하강 최대 깊이.
+  package static let maxNameTreeDepth = 64
+
+  /// 네임 트리 조회 1회가 해소하는 노드 수 상한 (병적 /Kids 부채꼴 가드).
+  package static let maxNameTreeNodesPerLookup = 1_024
+
+  /// XMP 메타데이터 스트림 최대 수용 바이트 (10MB — 초과 시 XMP 무시).
+  package static let maxXMPMetadataBytes = 10 << 20
 }

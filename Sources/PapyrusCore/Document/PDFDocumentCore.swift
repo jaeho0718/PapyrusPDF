@@ -23,8 +23,26 @@ package actor PDFDocumentCore {
   /// 누적 컨테이너 압축 해제 횟수 (캐시 히트면 늘지 않는다 — 테스트 관찰용).
   var containerDecodeCount: Int
 
+  /// 페이지 트리 평탄화의 영구 메모 태스크 (성공·실패 공히 메모, M3 §4.1).
+  var pageTreeTask: Task<PageTreeSnapshot, Error>?
+
+  /// 문서 메타데이터 수집의 영구 메모 태스크.
+  var metadataTask: Task<DocumentMetadata, Error>?
+
+  /// 목차 구축의 영구 메모 태스크.
+  var outlineTask: Task<[OutlineItem], Error>?
+
+  /// 페이지 트리 평탄화가 실제로 실행된 횟수 (dedupe 검증용 — 테스트 관찰용).
+  var pageTreeBuildCount: Int
+
+  /// 메타데이터 수집이 실제로 실행된 횟수 (테스트 관찰용).
+  var metadataBuildCount: Int
+
+  /// 목차 구축이 실제로 실행된 횟수 (테스트 관찰용).
+  var outlineBuildCount: Int
+
   /// 열기 중 축적된 경고. 열기 이후 불변 (가정 4).
-  package nonisolated let openWarnings: [OpenWarning]
+  package nonisolated let openWarnings: [CoreOpenWarning]
 
   /// 헤더 버전.
   package nonisolated let version: PDFVersion
@@ -36,7 +54,9 @@ package actor PDFDocumentCore {
   package nonisolated let securityHandler: any SecurityHandler
 
   /// 완성된 불변 상태로 액터를 생성한다 (열기 플로우 전용 — 외부에는 `open`만 노출한다).
-  private init(file: MappedFile, xref: XRefTable, version: PDFVersion, warnings: [OpenWarning]) {
+  private init(
+    file: MappedFile, xref: XRefTable, version: PDFVersion, warnings: [CoreOpenWarning]
+  ) {
     self.file = file
     self.xref = xref
     self.version = version
@@ -47,6 +67,12 @@ package actor PDFDocumentCore {
     self.objectStreamCache = ObjectStreamCache()
     self.inflightContainers = [:]
     self.containerDecodeCount = 0
+    self.pageTreeTask = nil
+    self.metadataTask = nil
+    self.outlineTask = nil
+    self.pageTreeBuildCount = 0
+    self.metadataBuildCount = 0
+    self.outlineBuildCount = 0
   }
 
   /// 파일을 연다. 헤더 검증 → xref 체인 로드 → 복구 폴백 → /Encrypt 감지 → /Root 검증.
@@ -182,7 +208,10 @@ package actor PDFDocumentCore {
       objectCacheCount: self.objectCache.count,
       objectStreamCacheBytes: self.objectStreamCache.totalCost,
       objectStreamCacheContainerCount: self.objectStreamCache.count,
-      containerDecodeCount: self.containerDecodeCount
+      containerDecodeCount: self.containerDecodeCount,
+      pageTreeBuildCount: self.pageTreeBuildCount,
+      metadataBuildCount: self.metadataBuildCount,
+      outlineBuildCount: self.outlineBuildCount
     )
   }
 }
@@ -293,19 +322,35 @@ package struct CacheStatistics: Sendable, Equatable {
   /// 누적 컨테이너 압축 해제 횟수 (in-flight dedupe 검증용 — 캐시 히트면 늘지 않는다).
   package let containerDecodeCount: Int
 
+  /// 페이지 트리 평탄화가 실제로 실행된 횟수 (dedupe 검증용).
+  package let pageTreeBuildCount: Int
+
+  /// 메타데이터 수집이 실제로 실행된 횟수 (dedupe 검증용).
+  package let metadataBuildCount: Int
+
+  /// 목차 구축이 실제로 실행된 횟수 (dedupe 검증용).
+  package let outlineBuildCount: Int
+
   /// 캐시 통계를 생성한다.
   /// - Parameters:
   ///   - objectCacheCount: 객체 LRU 적재 항목 수.
   ///   - objectStreamCacheBytes: ObjStm 캐시 적재 바이트.
   ///   - objectStreamCacheContainerCount: ObjStm 캐시 적재 컨테이너 수.
   ///   - containerDecodeCount: 누적 컨테이너 압축 해제 횟수.
+  ///   - pageTreeBuildCount: 페이지 트리 평탄화가 실제로 실행된 횟수.
+  ///   - metadataBuildCount: 메타데이터 수집이 실제로 실행된 횟수.
+  ///   - outlineBuildCount: 목차 구축이 실제로 실행된 횟수.
   package init(
     objectCacheCount: Int, objectStreamCacheBytes: Int, objectStreamCacheContainerCount: Int,
-    containerDecodeCount: Int
+    containerDecodeCount: Int, pageTreeBuildCount: Int = 0, metadataBuildCount: Int = 0,
+    outlineBuildCount: Int = 0
   ) {
     self.objectCacheCount = objectCacheCount
     self.objectStreamCacheBytes = objectStreamCacheBytes
     self.objectStreamCacheContainerCount = objectStreamCacheContainerCount
     self.containerDecodeCount = containerDecodeCount
+    self.pageTreeBuildCount = pageTreeBuildCount
+    self.metadataBuildCount = metadataBuildCount
+    self.outlineBuildCount = outlineBuildCount
   }
 }

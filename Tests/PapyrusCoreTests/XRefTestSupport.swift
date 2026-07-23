@@ -14,7 +14,7 @@ func classicRow(offset: Int, generation: Int, type: Character) -> String {
 
 /// `warnings`에 지정된 케이스가 존재하는지 (연관값 무시) 검사한다.
 func containsWarning(
-  _ warnings: [OpenWarning], matching predicate: (OpenWarning) -> Bool
+  _ warnings: [CoreOpenWarning], matching predicate: (CoreOpenWarning) -> Bool
 ) -> Bool {
   warnings.contains(where: predicate)
 }

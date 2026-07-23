@@ -20,7 +20,7 @@ package struct XRefStreamParser: Sendable {
   /// - Throws: 스트림 딕셔너리·디코딩·레이아웃 위반 시 ``XRefError``.
   package func parseSection(
     at offset: Int
-  ) throws(XRefError) -> (section: XRefSection, warnings: [OpenWarning]) {
+  ) throws(XRefError) -> (section: XRefSection, warnings: [CoreOpenWarning]) {
     var parser = COSParser(file: self.file)
     let indirect: IndirectObject
     do {
@@ -61,7 +61,7 @@ package struct XRefStreamParser: Sendable {
       indexPairs: indexPairs, availableRowCount: availableRowCount
     )
 
-    var warnings: [OpenWarning] = parser.warnings.map(OpenWarning.parse)
+    var warnings: [CoreOpenWarning] = parser.warnings.map(CoreOpenWarning.parse)
     if availableRowCount < expectedRowCount {
       warnings.append(.xrefStreamTruncated(offset: offset))
     }
@@ -202,9 +202,9 @@ extension XRefStreamParser {
   private static func readEntries(
     decoded: [UInt8], widths: FieldWidths, rowWidth: Int,
     indexPairs: [(start: Int, count: Int)], availableRowCount: Int
-  ) -> (entries: [Int: XRefEntry], warnings: [OpenWarning]) {
+  ) -> (entries: [Int: XRefEntry], warnings: [CoreOpenWarning]) {
     var entries: [Int: XRefEntry] = [:]
-    var warnings: [OpenWarning] = []
+    var warnings: [CoreOpenWarning] = []
     var rowCursor = 0
     var consumedRows = 0
 

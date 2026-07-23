@@ -25,7 +25,7 @@ let package = Package(
     // ── 테스트 타겟 ──
     .testTarget(
       name: "PapyrusTests",
-      dependencies: ["Papyrus", "PapyrusRendering", "PapyrusUI"]
+      dependencies: ["Papyrus", "PapyrusRendering", "PapyrusUI", "PapyrusTestSupport"]
     ),
     .testTarget(
       name: "PapyrusTestSupportTests",

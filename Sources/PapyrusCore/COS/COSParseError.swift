@@ -49,7 +49,7 @@ package struct COSParseError: Error, Sendable, Equatable {
   }
 }
 
-/// 에러로 승격하지 않은 관용 처리 신호. M2에서 공개 `OpenWarning`으로 집계된다.
+/// 에러로 승격하지 않은 관용 처리 신호. M2에서 공개 `CoreOpenWarning`으로 집계된다.
 package enum ParseWarning: Sendable, Equatable {
   /// `/Length`가 실제 `endstream` 위치와 불일치 → 스캔으로 복구함.
   case streamLengthMismatch(id: ObjectID?, declared: Int?, actual: Int)

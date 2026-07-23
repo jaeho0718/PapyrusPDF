@@ -5,6 +5,8 @@ on:
     branches: [develop, main]
   push:
     branches: [develop, main]
+  # 수동 실행 — 병합 전 성능 게이트를 확인하고 싶을 때 사용 (r1, §5.8)
+  workflow_dispatch:
 
 jobs:
   # 브랜치 보호의 required status check 이름과 일치해야 한다 (lint-build-test)
@@ -32,3 +34,24 @@ jobs:
 
       - name: Test
         run: swift test
+
+  # 비차단 성능 게이트 (r1, §5.8) — 브랜치 보호 required status check가 아니다.
+  # 공유 macOS 러너는 벽시계 임계값이 플레이키하므로 PR을 막지 않고, develop/main
+  # push(병합 후) 회귀 트립와이어로만 둔다. 병합 전 확인은 workflow_dispatch로 수동 실행.
+  performance-gate:
+    name: performance-gate
+    runs-on: macos-latest
+    # PR에서는 실행하지 않는다 — push(develop/main 병합 후) + 수동 실행만
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          swift --version
+
+      - name: Performance gate (release)
+        run: PAPYRUS_PERF=1 PAPYRUS_PERF_SCALE=2 swift test -c release --filter PerformanceGateTests

@@ -86,3 +86,99 @@ extension COSName {
   /// `/Catalog`.
   package static let catalog: COSName = "Catalog"
 }
+
+/// M3에서 필요한 표준 이름 상수 (페이지 트리/메타데이터/목차/네임 트리).
+extension COSName {
+  /// `/Pages`.
+  package static let pages: COSName = "Pages"
+
+  /// `/Page`.
+  package static let page: COSName = "Page"
+
+  /// `/Kids`.
+  package static let kids: COSName = "Kids"
+
+  /// `/Count`.
+  package static let count: COSName = "Count"
+
+  /// `/Parent`.
+  package static let parent: COSName = "Parent"
+
+  /// `/MediaBox`.
+  package static let mediaBox: COSName = "MediaBox"
+
+  /// `/CropBox`.
+  package static let cropBox: COSName = "CropBox"
+
+  /// `/Rotate`.
+  package static let rotate: COSName = "Rotate"
+
+  /// `/Resources`.
+  package static let resources: COSName = "Resources"
+
+  /// `/Info`.
+  package static let info: COSName = "Info"
+
+  /// `/Title`.
+  package static let title: COSName = "Title"
+
+  /// `/Author`.
+  package static let author: COSName = "Author"
+
+  /// `/Subject`.
+  package static let subject: COSName = "Subject"
+
+  /// `/Keywords`.
+  package static let keywords: COSName = "Keywords"
+
+  /// `/Creator`.
+  package static let creator: COSName = "Creator"
+
+  /// `/Producer`.
+  package static let producer: COSName = "Producer"
+
+  /// `/CreationDate`.
+  package static let creationDate: COSName = "CreationDate"
+
+  /// `/ModDate`.
+  package static let modDate: COSName = "ModDate"
+
+  /// `/Metadata`.
+  package static let metadataKey: COSName = "Metadata"
+
+  /// `/Outlines`.
+  package static let outlines: COSName = "Outlines"
+
+  /// `/Next`.
+  package static let next: COSName = "Next"
+
+  /// `/Last`.
+  package static let last: COSName = "Last"
+
+  /// `/Dest`.
+  package static let dest: COSName = "Dest"
+
+  /// `/A`.
+  package static let aKey: COSName = "A"
+
+  /// `/S`.
+  package static let sKey: COSName = "S"
+
+  /// `/D`.
+  package static let dKey: COSName = "D"
+
+  /// `/GoTo`.
+  package static let goTo: COSName = "GoTo"
+
+  /// `/Names`.
+  package static let names: COSName = "Names"
+
+  /// `/Dests`.
+  package static let dests: COSName = "Dests"
+
+  /// `/Limits`.
+  package static let limits: COSName = "Limits"
+
+  /// `/Version`.
+  package static let version: COSName = "Version"
+}

@@ -132,14 +132,14 @@ Sources/
 
 ```swift
 public final class PapyrusDocument: Sendable {
-    static func open(url: URL) async throws -> PapyrusDocument
-    static func open(data: Data) async throws -> PapyrusDocument
+    static func open(url: URL) async throws(PapyrusError) -> PapyrusDocument
+    static func open(data: Data) async throws(PapyrusError) -> PapyrusDocument
     var openWarnings: [OpenWarning] { get }
-    var pageCount: Int { get async throws }
-    var metadata: DocumentMetadata { get async throws }
-    var outline: [OutlineItem] { get async throws }
-    func page(at index: Int) async throws -> PageInfo
-    func text(forPage index: Int) async throws -> PageTextContent
+    var pageCount: Int { get async throws(PapyrusError) }
+    var metadata: DocumentMetadata { get async throws(PapyrusError) }
+    var outline: [OutlineItem] { get async throws(PapyrusError) }
+    func page(at index: Int) async throws(PapyrusError) -> PageInfo
+    func text(forPage index: Int) async throws(PapyrusError) -> PageTextContent
     func search(_ query: String, options: SearchOptions) -> AsyncThrowingStream<SearchResult, Error>
 }
 // 값 타입: DocumentMetadata, PageInfo(mediaBox/cropBox/rotation/displaySize),
@@ -155,7 +155,7 @@ public final class PapyrusDocument: Sendable {
 - 유닛: 렉서 골든 테스트(`@Test(arguments:)` 파라미터화), 필터 라운드트립, xref 매트릭스, 날짜 파서, ToUnicode/커닝 공백 삽입 등 텍스트 추출 검증, 네임 트리 조회.
 - 렌더링: 스모크 수준(타일 CGImage 비-nil + 크기 + 픽셀 프로브). 픽셀 퍼펙트 스냅샷은 v1 보류(OS 버전별 CG 출력 편차).
 - 뷰어: `ReaderLayoutEngine`은 순수 수학이라 집중 테스트. 스크롤 동작은 데모 앱에서 수동 검증.
-- 성능: 픽스처 빌더로 5,000페이지 합성 PDF 생성 → 열기+pageCount < 250ms, warm `page(at:)` < 1ms 등을 `.timeLimit` trait으로 게이트 (env 플래그 뒤에).
+- 성능: 픽스처 빌더로 5,000페이지 합성 PDF 생성 → 열기+pageCount < 250ms, warm `page(at:)` < 1ms 등을 `ContinuousClock` 수동 측정 + `#expect` 판정으로 게이트 (env 플래그 뒤에). `.timeLimit` trait은 최소 단위가 분이라 ms 게이트에 쓸 수 없고, 행(hang) 가드로만 사용.
 - `Examples/PapyrusDemo` 앱 (별도 Xcode 프로젝트) — Instruments로 스크롤/메모리 프로파일링.
 
 ## 구현 마일스톤
