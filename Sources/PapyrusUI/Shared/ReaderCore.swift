@@ -1,0 +1,224 @@
+import CoreGraphics
+import PapyrusRendering
+import QuartzCore
+
+/// 뷰어 상태 스냅숏 (모델 통지용).
+package struct ReaderViewState: Sendable, Equatable {
+  /// 현재 페이지 (뷰포트 중앙 기준).
+  package let currentPageIndex: Int
+  /// 가시 페이지 범위.
+  package let visiblePageRange: Range<Int>
+  /// 현재 줌 배율.
+  package let zoomScale: CGFloat
+}
+
+/// 레이아웃·가상화·렌더 요청·탐색의 수렴점. 플랫폼 공유 ~85%의 몸통이다
+/// (ARCHITECTURE 123행). 호스트 1개에 부착되어 contentLayer를 소유·관리한다.
+@MainActor
+package final class ReaderCore: ReaderHostEventSink {
+  /// 레이아웃 엔진 (불변).
+  package let layout: ReaderLayoutEngine
+
+  /// 렌더 서비스 (M5 계약의 유일 소비자).
+  package let renderQueue: TileRenderQueue
+
+  /// 상태 변경 통지 (모델이 구독. 값이 실제로 바뀔 때만 호출).
+  package var onStateChange: ((ReaderViewState) -> Void)?
+
+  /// 부착된 호스트 (미부착이면 `nil`).
+  ///
+  /// 내부 상태는 `ReaderCore+Fetching.swift` 확장(같은 모듈)도 참조하므로 `private`가
+  /// 아니라 모듈 스코프로 둔다 (M5 `TileRenderQueue`+확장 파일 분리와 동일 패턴).
+  weak var host: (any ReaderScrollHost)?
+
+  /// 실체화된 페이지 (인덱스 → 컨트롤러).
+  var controllers: [Int: PageLayerController] = [:]
+
+  /// 유휴 컨트롤러 재활용 풀.
+  let pool = PageLayerPool()
+
+  /// 현재 스냅된 스케일 버킷 (가정 3의 확정 버킷).
+  var currentBucket: ScaleBucket
+
+  /// 가시 페치 진행 중 태스크 (요청 키 → 태스크).
+  var visibleFetchTasks: [RenderRequestKey: Task<Void, Never>] = [:]
+
+  /// 마지막으로 M5에 밀어넣은 뷰포트 (Equatable 스킵용).
+  var lastPushedViewport: RenderViewport?
+
+  /// 코얼레싱 대기 중인 최신 뷰포트 (§4.7).
+  var pendingViewport: RenderViewport?
+
+  /// 뷰포트 푸시 루프 태스크.
+  var viewportPushTask: Task<Void, Never>?
+
+  /// 마지막으로 통지한 상태 (변화 감지용).
+  private var lastState: ReaderViewState?
+
+  /// `documentUnavailable` 래치 — 이후 페치 태스크 스폰을 중단한다.
+  var renderingUnavailable = false
+
+  /// `pageUnavailable`로 확인된 페이지의 영구 실패 래치 (§5.2 — 파서 페이지 수가
+  /// CGPDFDocument 페이지 수를 넘는 손상 문서). 한 번 실패한 페이지는 이후
+  /// `updateFetches`의 필요 집합에서 제외해 프레임마다 재요청이 스폰되는 것을 막는다.
+  /// `documentUnavailable`과 달리 페이지 단위이며, 실패가 문서 구조에서 기인해
+  /// 재열지 않는 한 바뀌지 않으므로 세션 내내 유지해도 안전하다.
+  var unavailablePages: Set<Int> = []
+
+  /// 코어를 만든다. 이 시점엔 호스트가 없다 (SwiftUI 조립 순서 — §4.1).
+  /// - Parameters:
+  ///   - layout: 레이아웃 엔진.
+  ///   - renderQueue: 렌더 서비스.
+  package init(layout: ReaderLayoutEngine, renderQueue: TileRenderQueue) {
+    self.layout = layout
+    self.renderQueue = renderQueue
+    self.currentBucket = ScaleBucket(exponent: 0)
+  }
+
+  /// 호스트에 부착: contentSize·줌 한계 설정, 초기 fit-width 줌, 첫 실체화.
+  /// - Parameter host: 부착할 스크롤 호스트.
+  package func attach(to host: any ReaderScrollHost) {
+    self.host = host
+    host.setContentSize(self.layout.contentSize)
+    let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
+    host.setZoomLimits(minimum: fit, maximum: ReaderLayoutMetrics.maxZoomScale)
+    host.scrollTo(contentY: 0, zoomScale: fit, animated: false)
+    self.currentBucket = ScaleBucket(snapping: fit)
+    self.hostViewportDidChange()
+  }
+
+  /// 분리: 진행 중 요청 태스크 전부 취소, 레이어 철거.
+  package func detach() {
+    for task in self.visibleFetchTasks.values {
+      task.cancel()
+    }
+    self.visibleFetchTasks.removeAll()
+    self.viewportPushTask?.cancel()
+    self.viewportPushTask = nil
+    self.pendingViewport = nil
+    for controller in self.controllers.values {
+      controller.containerLayer.removeFromSuperlayer()
+      self.pool.release(controller)
+    }
+    self.controllers.removeAll()
+    self.host = nil
+  }
+
+  // MARK: - ReaderHostEventSink
+
+  /// 스크롤·줌 진행으로 가시 영역이 바뀌었다 (§4.3 파이프라인).
+  package func hostViewportDidChange() {
+    guard let host else {
+      return
+    }
+    let rect = host.visibleContentRect
+    let zoom = host.zoomScale
+    let visible = self.layout.visiblePageRange(in: rect)
+    let current =
+      VisibleRangeCalculator.currentPageIndex(layout: self.layout, visibleContentRect: rect) ?? 0
+    let state = ReaderViewState(
+      currentPageIndex: current, visiblePageRange: visible, zoomScale: zoom
+    )
+    if state != self.lastState {
+      self.lastState = state
+      self.onStateChange?(state)
+    }
+
+    let materialized = VisibleRangeCalculator.materializedRange(
+      visible: visible, pageCount: self.layout.pageCount
+    )
+    self.updateMaterialization(to: materialized)
+    self.updateFetches(visible: visible, rect: rect)
+
+    let viewport = VisibleRangeCalculator.renderViewport(
+      layout: self.layout, visibleContentRect: rect, scaleBucket: self.currentBucket,
+      viewportSize: host.viewportSize
+    )
+    self.pushViewport(viewport)
+  }
+
+  /// 줌 제스처가 끝났다 — 버킷 재스냅 (§4.5).
+  package func hostZoomInteractionDidEnd() {
+    guard let host else {
+      return
+    }
+    let newBucket = ScaleBucket(snapping: host.zoomScale)
+    guard newBucket != self.currentBucket else {
+      return
+    }
+    self.currentBucket = newBucket
+    for controller in self.controllers.values {
+      controller.activateBucket(newBucket)
+    }
+    for (pageIndex, controller) in self.controllers {
+      self.fillCacheHits(forPage: pageIndex, controller: controller, host: host)
+    }
+    self.hostViewportDidChange()
+  }
+
+  /// 뷰포트 크기가 바뀌었다 (회전·창 리사이즈) — 줌 한계 재계산 + 위치 보존.
+  package func hostViewportSizeDidChange() {
+    guard let host else {
+      return
+    }
+    let position = self.capturePosition()
+    let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
+    host.setZoomLimits(minimum: fit, maximum: ReaderLayoutMetrics.maxZoomScale)
+    if let position {
+      self.restore(position, animated: false)
+    } else {
+      self.hostViewportDidChange()
+    }
+  }
+
+  // MARK: - 탐색 (§4.6)
+
+  /// 페이지 상단으로 스크롤 (인덱스 클램프, 빈 문서 무시).
+  /// - Parameters:
+  ///   - index: 이동할 페이지 인덱스.
+  ///   - animated: 애니메이션 여부.
+  package func goToPage(_ index: Int, animated: Bool) {
+    guard self.layout.pageCount > 0, let host else {
+      return
+    }
+    let clamped = min(max(index, 0), self.layout.pageCount - 1)
+    guard let frame = self.layout.pageFrame(at: clamped) else {
+      return
+    }
+    let y = max(0, frame.minY - ReaderLayoutMetrics.pageSpacing / 2)
+    host.scrollTo(contentY: y, zoomScale: nil, animated: animated)
+  }
+
+  /// 현재 위치 포착 (빈 문서·미부착이면 nil).
+  /// - Returns: 현재 위치 스냅숏.
+  package func capturePosition() -> ReaderPosition? {
+    guard let host else {
+      return nil
+    }
+    return self.layout.capturePosition(
+      viewportTopY: host.visibleContentRect.minY, zoomScale: host.zoomScale
+    )
+  }
+
+  /// 위치 복원 (줌 → 오프셋 순서로 적용, 전부 클램프).
+  /// - Parameters:
+  ///   - position: 복원할 위치 스냅숏.
+  ///   - animated: 애니메이션 여부.
+  package func restore(_ position: ReaderPosition, animated: Bool) {
+    guard let host else {
+      return
+    }
+    let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
+    let zoom = min(max(position.zoomScale, fit), ReaderLayoutMetrics.maxZoomScale)
+    let y = self.layout.contentY(for: position)
+    host.scrollTo(contentY: y, zoomScale: zoom, animated: animated)
+    self.hostZoomInteractionDidEnd()
+  }
+
+  // MARK: - 테스트 관찰
+
+  /// 실체화된 페이지 인덱스 집합.
+  package var materializedPageIndices: Set<Int> {
+    Set(self.controllers.keys)
+  }
+}

@@ -50,8 +50,10 @@ Sources/
     PagePreviewCache.swift, TileRenderQueue.swift, MemoryPressure.swift,
     RenderingLimits.swift(한도 상수), RenderRequest.swift(우선순위 버퍼)
   PapyrusUI/
-    Shared/     ReaderCore.swift, ReaderLayoutEngine.swift, PageLayerController.swift,
-                VisibleRangeCalculator.swift, HighlightOverlay.swift
+    Shared/     ReaderCore.swift, ReaderLayoutEngine.swift,
+                PageLayerController.swift(PageLayerPool 동거),
+                VisibleRangeCalculator.swift, ReaderScrollHost.swift,
+                HighlightOverlay.swift(M7)
     iOS/        ReaderScrollView_iOS.swift + UIViewRepresentable
     macOS/      ReaderScrollView_macOS.swift + NSViewRepresentable
     PapyrusReader.swift, PapyrusReaderModel.swift
@@ -124,7 +126,8 @@ Sources/
 - macOS는 `isFlipped = true` NSView로 좌표계를 iOS와 통일 — 플랫폼 분기 대부분 제거.
 - **레이아웃 엔진**: 파서의 PageRecord에서 페이지 크기 획득(CGPDFDocument 불필요 → 열자마자 레이아웃 완성). 누적 Y 오프셋 배열 1회 계산(5,000페이지 = 40KB), 프레임 조회 O(1), 오프셋→페이지 이진 탐색 O(log n).
 - **가상화**: visibleRange ±2페이지만 `PageLayerController` 실체화, 재활용 풀(캡 ~8). 이탈 시 풀 반환 + 타일 요청 취소.
-- 탐색: goToPage / 목차 목적지 이동 / `ReaderPosition`(pageIndex + 정규화 오프셋 + zoom, Codable) 저장·복원.
+- 탐색: goToPage / 목차 목적지 이동 / `ReaderPosition`(pageIndex + 페이지 내 정규화 오프셋 + zoom, Codable) 저장·복원.
+- M5/M6 경계 계약: 가시 캐시 조회는 동기(nonisolated Mutex 캐시), 미스는 visible 등급 async 페치, 프리페치·폐기는 `updateViewport` 위임.
 - **검색**: `PapyrusDocument.search()` → `AsyncThrowingStream<SearchResult>` (병렬 텍스트 워밍업, 페이지 순서대로 방출). 매칭은 Foundation `range(of:options:[.caseInsensitive,.diacriticInsensitive])` 반복 — 폴딩 길이 변화로 인한 오프셋 매핑 버그 회피. 결과 quad는 run + advances에서 보간. 뷰어는 페이지당 `CAShapeLayer` 하나로 전체 quad 패스 오버레이, 현재 매치는 강조 레이어, next/prev 시 스크롤 이동.
 - SwiftUI 퍼사드: `PapyrusReader(document:model:)` + `@Observable PapyrusReaderModel`(currentPageIndex, visiblePageRange, zoomScale, searchState, goToPage, search, next/previousMatch, position 저장·복원).
 - 확장 대비(설계만): 텍스트 선택 = TextRun quad 히트테스트 레이어 추가, 주석 = 오버레이 레이어 종 추가, 썸네일 = RenderWorker 프리뷰 재사용 — 구조 변경 불필요.
@@ -148,6 +151,25 @@ public final class PapyrusDocument: Sendable {
 //         TextRun(range/quad/advances/isInvisible), Quad, SearchResult(pageIndex/range/quads/snippet)
 // enum PapyrusError: notAPDF, damagedDocument, encryptedDocument, pageOutOfRange,
 //                    unsupportedFilter, cancelled ...
+
+// M6 공개 표면 (PapyrusUI):
+public struct PapyrusReader: View {
+    init(document: PapyrusDocument, model: PapyrusReaderModel)
+}
+@MainActor @Observable
+public final class PapyrusReaderModel {
+    var loadState: ReaderLoadState { get }   // loading / ready / failed(PapyrusError)
+    var pageCount: Int { get }
+    var currentPageIndex: Int { get }
+    var visiblePageRange: Range<Int> { get }
+    var zoomScale: CGFloat { get }
+    func goToPage(_ index: Int, animated: Bool = true)
+    func go(to destination: OutlineDestination, animated: Bool = true)
+    func capturePosition() -> ReaderPosition?
+    func restore(_ position: ReaderPosition)
+}
+// 값 타입: ReaderPosition(pageIndex/normalizedOffset/zoomScale, Codable),
+//         ReaderLoadState(loading/ready/failed)
 ```
 
 ## 테스트 전략 (Swift Testing)
@@ -155,7 +177,7 @@ public final class PapyrusDocument: Sendable {
 - **`PapyrusTestSupport`의 `PDFFixtureBuilder`가 핵심**: 코드로 최소 PDF를 생성하는 소형 PDF 라이터. 모든 xref 변형(.classicTable/.xrefStream/.objectStreams/.hybrid), 증분 업데이트, 의도적 손상 모드를 재현 가능 — 바이너리 블롭 관리 불필요. 실제 소형 PDF 5~10개를 리소스로 보충.
 - 유닛: 렉서 골든 테스트(`@Test(arguments:)` 파라미터화), 필터 라운드트립, xref 매트릭스, 날짜 파서, ToUnicode/커닝 공백 삽입 등 텍스트 추출 검증, 네임 트리 조회.
 - 렌더링: 스모크 수준(타일 CGImage 비-nil + 크기 + 픽셀 프로브). 픽셀 퍼펙트 스냅샷은 v1 보류(OS 버전별 CG 출력 편차).
-- 뷰어: `ReaderLayoutEngine`은 순수 수학이라 집중 테스트. 스크롤 동작은 데모 앱에서 수동 검증.
+- 뷰어: `ReaderLayoutEngine`은 순수 수학이라 집중 테스트(`Tests/PapyrusUITests` — PapyrusRenderingTests 전례를 따르는 별도 타겟). 스크롤 동작은 데모 앱에서 수동 검증.
 - 성능: 픽스처 빌더로 5,000페이지 합성 PDF 생성 → 열기+pageCount < 250ms, warm `page(at:)` < 1ms 등을 `ContinuousClock` 수동 측정 + `#expect` 판정으로 게이트 (env 플래그 뒤에). `.timeLimit` trait은 최소 단위가 분이라 ms 게이트에 쓸 수 없고, 행(hang) 가드로만 사용.
 - `Examples/PapyrusDemo` 앱 (별도 Xcode 프로젝트) — Instruments로 스크롤/메모리 프로파일링.
 
