@@ -38,6 +38,10 @@ let package = Package(
     .testTarget(
       name: "PapyrusRenderingTests",
       dependencies: ["PapyrusRendering", "PapyrusCore", "PapyrusTestSupport"]
+    ),
+    .testTarget(
+      name: "PapyrusUITests",
+      dependencies: ["PapyrusUI", "PapyrusRendering", "PapyrusCore", "PapyrusTestSupport"]
     )
   ],
   swiftLanguageModes: [.v6]
