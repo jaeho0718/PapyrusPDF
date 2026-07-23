@@ -40,6 +40,7 @@ extension ReaderCore {
       host.contentLayer.addSublayer(controller.containerLayer)
       self.controllers[pageIndex] = controller
       self.fillCacheHits(forPage: pageIndex, controller: controller, host: host)
+      self.applyHighlights(to: controller, pageIndex: pageIndex)
     }
   }
 

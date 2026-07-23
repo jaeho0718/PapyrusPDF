@@ -85,4 +85,13 @@ package enum CoreLimits {
 
   /// 페이지 1장 콘텐츠(폼 포함) 디코딩 총량 상한 (32MB — 초과 세그먼트는 절단).
   package static let maxContentBytesPerPage = 32 << 20
+
+  /// 페이지당 검색 매치 상한 (병적 문서의 스트림 버퍼 폭주 방지).
+  package static let maxSearchMatchesPerPage = 1_000
+
+  /// 문서당 검색 매치 총 상한 — 도달 시 스트림은 정상 종료한다.
+  package static let maxSearchTotalMatches = 10_000
+
+  /// 검색 워밍업 병렬 폭 상한 (실제 폭 = min(이 값, 활성 코어 수, 페이지 수)).
+  package static let maxSearchWarmupWidth = 4
 }

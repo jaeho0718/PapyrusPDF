@@ -45,6 +45,9 @@ package final class PageLayerController {
   /// 다음에 부여할 스테일 강등 순번.
   private var nextStaleSequence = 0
 
+  /// 지연 생성 하이라이트 오버레이 (검색 미사용 페이지는 비용 0).
+  private var highlightOverlay: HighlightOverlay?
+
   /// 컨트롤러를 만든다.
   package init() {
     let containerLayer = CALayer()
@@ -141,6 +144,32 @@ package final class PageLayerController {
     self.currentTileLayers[key] != nil
   }
 
+  /// 검색 하이라이트를 표시한다 (없던 오버레이는 이때 지연 생성한다).
+  /// - Parameters:
+  ///   - highlights: 이 페이지의 표시 공간 매치들.
+  ///   - currentOrdinal: 현재 매치의 페이지 내 순번 (이 페이지에 없으면 `nil`).
+  package func setSearchHighlights(_ highlights: PageSearchHighlights, currentOrdinal: Int?) {
+    let overlay = self.highlightOverlay ?? {
+      let created = HighlightOverlay(parent: self.overlayLayer)
+      self.highlightOverlay = created
+      return created
+    }()
+    overlay.apply(highlights, currentOrdinal: currentOrdinal)
+  }
+
+  /// 검색 하이라이트를 지운다 (오버레이 미생성이면 no-op).
+  package func clearSearchHighlights() {
+    self.highlightOverlay?.clear()
+  }
+
+  /// 버킷 전환 시 하이라이트 선명도를 갱신한다 (오버레이 미생성이면 no-op).
+  /// - Parameters:
+  ///   - screenScale: 화면 배율(픽셀 밀도).
+  ///   - bucketScale: 현재 스케일 버킷 배율.
+  package func updateHighlightContentsScale(screenScale: CGFloat, bucketScale: CGFloat) {
+    self.highlightOverlay?.updateContentsScale(screenScale: screenScale, bucketScale: bucketScale)
+  }
+
   /// 풀 반환 준비: 전 레이어 contents 해제·서브레이어 정리·pageIndex nil.
   package func prepareForReuse() {
     Self.withoutImplicitAnimation {
@@ -156,6 +185,8 @@ package final class PageLayerController {
     self.staleTileLayers.removeAll()
     self.pageIndex = nil
     self.currentBucket = nil
+    // 재활용 풀 경유 시 이전 페이지 하이라이트 잔류 방지 (필수 불변식).
+    self.clearSearchHighlights()
   }
 
   /// 새 타일 frame에 완전히 포함되는 스테일 레이어를 제거한다 (§4.5 규칙 1, 여유 ε).

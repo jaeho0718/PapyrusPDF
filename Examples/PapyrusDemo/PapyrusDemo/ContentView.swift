@@ -24,6 +24,7 @@ struct ContentView: View {
         .toolbar {
           ToolbarItemGroup(placement: .primaryAction) {
             if self.loader.document != nil {
+              SearchBar(model: self.loader.readerModel)
               ReaderToolbar(model: self.loader.readerModel)
             }
           }

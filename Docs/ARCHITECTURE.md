@@ -128,7 +128,7 @@ Sources/
 - **가상화**: visibleRange ±2페이지만 `PageLayerController` 실체화, 재활용 풀(캡 ~8). 이탈 시 풀 반환 + 타일 요청 취소.
 - 탐색: goToPage / 목차 목적지 이동 / `ReaderPosition`(pageIndex + 페이지 내 정규화 오프셋 + zoom, Codable) 저장·복원.
 - M5/M6 경계 계약: 가시 캐시 조회는 동기(nonisolated Mutex 캐시), 미스는 visible 등급 async 페치, 프리페치·폐기는 `updateViewport` 위임.
-- **검색**: `PapyrusDocument.search()` → `AsyncThrowingStream<SearchResult>` (병렬 텍스트 워밍업, 페이지 순서대로 방출). 매칭은 Foundation `range(of:options:[.caseInsensitive,.diacriticInsensitive])` 반복 — 폴딩 길이 변화로 인한 오프셋 매핑 버그 회피. 결과 quad는 run + advances에서 보간. 뷰어는 페이지당 `CAShapeLayer` 하나로 전체 quad 패스 오버레이, 현재 매치는 강조 레이어, next/prev 시 스크롤 이동.
+- **검색**: `PapyrusDocument.search()` → `AsyncThrowingStream<SearchResult>` (병렬 텍스트 워밍업, 페이지 순서대로 방출). 매칭은 Foundation `range(of:options:[.caseInsensitive,.diacriticInsensitive])` 반복 — 폴딩 길이 변화로 인한 오프셋 매핑 버그 회피. 결과 quad는 run + advances에서 보간. 뷰어는 페이지당 `CAShapeLayer` 하나로 전체 quad 패스 오버레이, 현재 매치는 강조 레이어, next/prev 시 스크롤 이동. 매치 캡: 페이지당 1,000 / 문서당 10,000 — 초과 시 정상 종료 (스트림 무한 버퍼 정책의 안전 근거).
 - SwiftUI 퍼사드: `PapyrusReader(document:model:)` + `@Observable PapyrusReaderModel`(currentPageIndex, visiblePageRange, zoomScale, searchState, goToPage, search, next/previousMatch, position 저장·복원).
 - 확장 대비(설계만): 텍스트 선택 = TextRun quad 히트테스트 레이어 추가, 주석 = 오버레이 레이어 종 추가, 썸네일 = RenderWorker 프리뷰 재사용 — 구조 변경 불필요.
 
@@ -148,7 +148,7 @@ public final class PapyrusDocument: Sendable {
 }
 // 값 타입: DocumentMetadata, PageInfo(mediaBox/cropBox/rotation/displaySize),
 //         OutlineItem(title/destination/children), PageTextContent(string/runs),
-//         TextRun(range/quad/advances/isInvisible), Quad, SearchResult(pageIndex/range/quads/snippet)
+//         TextRun(range/quad/advances/isInvisible), Quad, SearchResult(pageIndex/range/quads/snippet/snippetMatchRange)
 // enum PapyrusError: notAPDF, damagedDocument, encryptedDocument, pageOutOfRange,
 //                    unsupportedFilter, cancelled ...
 

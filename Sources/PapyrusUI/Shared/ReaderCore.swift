@@ -22,6 +22,10 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 렌더 서비스 (M5 계약의 유일 소비자).
   package let renderQueue: TileRenderQueue
 
+  /// 화면 배율 (픽셀 밀도) — `renderQueue`(액터)와 동일 값을 동기 접근용으로 보관한다.
+  /// 하이라이트 `contentsScale` 계산(§2.4)에 쓰인다.
+  package let pixelScale: CGFloat
+
   /// 상태 변경 통지 (모델이 구독. 값이 실제로 바뀔 때만 호출).
   package var onStateChange: ((ReaderViewState) -> Void)?
 
@@ -55,6 +59,24 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 마지막으로 통지한 상태 (변화 감지용).
   private var lastState: ReaderViewState?
 
+  /// 검색 코디네이터 (검색 미사용 조립이면 `nil` — 기존 테스트 영향 없음).
+  let searchCoordinator: ReaderSearchCoordinator?
+
+  /// 페이지 → 표시 공간 하이라이트 (검색 세션 동안 전량 보관 — 캡은 `CoreLimits`로 유계).
+  var searchHighlights: [Int: PageSearchHighlights] = [:]
+
+  /// 평탄 매치 색인: 순번 → (페이지, 페이지 내 순번). next/prev·카운트의 진실 원천.
+  var searchMatchIndex: [(pageIndex: Int, ordinal: Int)] = []
+
+  /// 현재 매치의 평탄 순번 (없으면 `nil`).
+  var currentMatchFlatIndex: Int?
+
+  /// 검색 요약 상태 통지 (모델이 구독).
+  package var onSearchStateChange: ((ReaderSearchState) -> Void)?
+
+  /// 마지막으로 통지한 검색 상태 (query·phase 보존용 — `advanceMatch`가 재사용한다).
+  var currentSearchState: ReaderSearchState = .idle
+
   /// `documentUnavailable` 래치 — 이후 페치 태스크 스폰을 중단한다.
   var renderingUnavailable = false
 
@@ -69,10 +91,21 @@ package final class ReaderCore: ReaderHostEventSink {
   /// - Parameters:
   ///   - layout: 레이아웃 엔진.
   ///   - renderQueue: 렌더 서비스.
-  package init(layout: ReaderLayoutEngine, renderQueue: TileRenderQueue) {
+  ///   - pixelScale: 화면 배율 (`renderQueue`와 동일 값 — 기본 2, `RenderConfiguration`
+  ///     기본값과 정합).
+  ///   - searchCoordinator: 검색 코디네이터 (기본 `nil` — 검색 미사용 조립).
+  package init(
+    layout: ReaderLayoutEngine, renderQueue: TileRenderQueue, pixelScale: CGFloat = 2,
+    searchCoordinator: ReaderSearchCoordinator? = nil
+  ) {
     self.layout = layout
     self.renderQueue = renderQueue
+    self.pixelScale = pixelScale
     self.currentBucket = ScaleBucket(exponent: 0)
+    self.searchCoordinator = searchCoordinator
+    searchCoordinator?.onEvent = { [weak self] event in
+      self?.handleSearchEvent(event)
+    }
   }
 
   /// 호스트에 부착: contentSize·줌 한계 설정, 초기 fit-width 줌, 첫 실체화.
@@ -102,6 +135,11 @@ package final class ReaderCore: ReaderHostEventSink {
     }
     self.controllers.removeAll()
     self.host = nil
+
+    self.searchCoordinator?.cancel()
+    self.searchHighlights.removeAll()
+    self.searchMatchIndex.removeAll()
+    self.currentMatchFlatIndex = nil
   }
 
   // MARK: - ReaderHostEventSink
@@ -149,6 +187,9 @@ package final class ReaderCore: ReaderHostEventSink {
     self.currentBucket = newBucket
     for controller in self.controllers.values {
       controller.activateBucket(newBucket)
+      controller.updateHighlightContentsScale(
+        screenScale: self.pixelScale, bucketScale: newBucket.scale
+      )
     }
     for (pageIndex, controller) in self.controllers {
       self.fillCacheHits(forPage: pageIndex, controller: controller, host: host)
