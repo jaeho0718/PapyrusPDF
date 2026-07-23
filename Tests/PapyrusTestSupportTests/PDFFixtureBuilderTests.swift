@@ -339,7 +339,7 @@ struct PDFFixtureBuilderTests {
 ///
 /// `fixture.data`는 헤더에 비ASCII 바이너리 마커를 포함하므로 `String(decoding:)`로
 /// 전체를 문자열화하지 않고, 바이트 단위로 직접 탐색한다.
-private func offset(of pattern: String, in data: Data, from start: Int = 0) -> Int? {
+func offset(of pattern: String, in data: Data, from start: Int = 0) -> Int? {
   let patternBytes = Array(pattern.utf8)
   let dataBytes = [UInt8](data)
   guard !patternBytes.isEmpty, patternBytes.count <= dataBytes.count else {

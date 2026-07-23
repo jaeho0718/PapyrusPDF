@@ -8,11 +8,19 @@ import Foundation
 package struct PDFFixtureBuilder: Sendable {
   /// xref 섹션 기록 방식.
   ///
-  /// v0는 클래식 테이블만 지원한다. M2에서 `.xrefStream`, `.objectStreams`,
-  /// `.hybrid` 케이스가 추가된다 — 케이스 추가만으로 확장되도록 이 enum이 유일한 분기점이다.
-  package enum XRefStyle: Sendable {
+  /// 케이스 추가만으로 확장되도록 이 enum이 유일한 분기점이다.
+  package enum XRefStyle: Sendable, Equatable {
     /// PDF 1.0 클래식 `xref` 테이블 + `trailer` 딕셔너리.
     case classicTable
+    /// xref 스트림 (/Type /XRef, /W [1 4 2], Flate + PNG Up predictor(12), /Index 명시).
+    /// 트레일러 키는 스트림 딕셔너리에 병합, `trailer` 키워드 없음.
+    case xrefStream
+    /// 비-스트림 객체(Catalog·Pages·Page들)를 ObjStm 컨테이너 하나에 압축 수납.
+    /// xref는 필연적으로 스트림 방식 (type-2 엔트리는 클래식 테이블로 표현 불가).
+    case objectStreams
+    /// 클래식 테이블(압축 객체는 서브섹션 갭으로 누락) + /XRefStm 스트림 병기.
+    /// 압축 수납 대상은 `.objectStreams`와 동일.
+    case hybrid
   }
 
   /// 생성할 페이지 수. 0 이상. (0이면 /Kids [] /Count 0 — 퇴화 케이스 테스트용)
@@ -30,6 +38,16 @@ package struct PDFFixtureBuilder: Sendable {
   /// 전 페이지가 공유하는 콘텐츠 스트림. `nil`이면 v0와 동일한 바이트를 산출한다.
   package var contentStream: ContentStreamSpec?
 
+  /// 증분 업데이트 목록 (순서 = 적용 순서). 각 항목이 body 추가분 + 새 xref 섹션
+  /// (/Prev = 직전 섹션)을 원본 뒤에 덧붙인다. 빈 배열이면 기존 출력과 바이트 동일.
+  package var updates: [IncrementalUpdateSpec]
+
+  /// 트레일러(또는 xref 스트림 딕셔너리)에 추가할 원시 엔트리.
+  /// 예: `["Encrypt": "<< /Filter /Standard /V 2 >>"]` — 값은 COS 구문 원문.
+  /// 암호화 감지(M2)·/ID(M3) 등 트레일러 변형 테스트의 범용 주입점. 키는 이름(슬래시
+  /// 제외)이며, 기록 시 키 이름 사전순으로 정렬해 결정적으로 출력한다.
+  package var extraTrailerEntries: [String: String]
+
   /// 빌더를 생성한다.
   /// - Parameters:
   ///   - pageCount: 생성할 페이지 수 (기본 1).
@@ -37,18 +55,24 @@ package struct PDFFixtureBuilder: Sendable {
   ///   - pageHeight: 페이지 MediaBox 높이 (기본 792).
   ///   - xrefStyle: xref 기록 방식 (기본 `.classicTable`).
   ///   - contentStream: 전 페이지가 공유하는 콘텐츠 스트림 (기본 `nil` — v0와 바이트 동일).
+  ///   - updates: 증분 업데이트 목록 (기본 `[]` — v0와 바이트 동일).
+  ///   - extraTrailerEntries: 트레일러에 추가할 원시 엔트리 (기본 `[:]`).
   package init(
     pageCount: Int = 1,
     pageWidth: Double = 612,
     pageHeight: Double = 792,
     xrefStyle: XRefStyle = .classicTable,
-    contentStream: ContentStreamSpec? = nil
+    contentStream: ContentStreamSpec? = nil,
+    updates: [IncrementalUpdateSpec] = [],
+    extraTrailerEntries: [String: String] = [:]
   ) {
     self.pageCount = pageCount
     self.pageWidth = pageWidth
     self.pageHeight = pageHeight
     self.xrefStyle = xrefStyle
     self.contentStream = contentStream
+    self.updates = updates
+    self.extraTrailerEntries = extraTrailerEntries
   }
 
   /// 설정대로 PDF 바이트를 생성한다.
@@ -62,49 +86,76 @@ package struct PDFFixtureBuilder: Sendable {
 
     var writer = PDFByteWriter()
     var objectOffsets: [Int: Int] = [:]
-
-    // 객체 번호 배치(결정성): Catalog=1, Pages=2, 페이지=3...N+2, 공유 콘텐츠 스트림=N+3,
-    // /Length 간접 시 정수 객체=N+4. contentStream이 nil이면 이 두 객체는 존재하지 않는다.
-    let contentsObjectNumber = self.contentStream != nil ? self.pageCount + 3 : nil
-    let needsLengthObject = self.contentStream?.lengthStyle == .indirect
-    let lengthObjectNumber = needsLengthObject ? self.pageCount + 4 : nil
-
     self.writeHeader(into: &writer)
-    self.writeBody(
-      into: &writer, objectOffsets: &objectOffsets, contentsObjectNumber: contentsObjectNumber
+
+    let plan = self.makeObjectNumberPlan()
+    // 업데이트가 없으면 이 섹션이 최종본이므로 extraTrailerEntries를 여기 반영한다.
+    let extraEntries = self.updates.isEmpty ? self.extraTrailerEntries : [:]
+    let baseXRefOffset = self.writeBaseXRefSection(
+      into: &writer, objectOffsets: &objectOffsets, plan: plan, extraEntries: extraEntries
     )
-    if let contentStream, let contentsObjectNumber {
-      self.writeContentStreamObject(
-        into: &writer, objectOffsets: &objectOffsets, objectNumber: contentsObjectNumber,
-        lengthObjectNumber: lengthObjectNumber, spec: contentStream
+
+    let base = PDFFixture(
+      data: Data(writer.bytes), objectOffsets: objectOffsets, xrefOffset: baseXRefOffset,
+      sectionOffsets: [baseXRefOffset]
+    )
+    guard !self.updates.isEmpty else {
+      return base
+    }
+    return self.applyUpdates(to: base)
+  }
+
+  /// `xrefStyle`에 따라 본문 + xref 섹션(+트레일러)을 기록한다.
+  /// - Returns: 이 섹션의 시작 오프셋(= `startxref` 대상).
+  private func writeBaseXRefSection(
+    into writer: inout PDFByteWriter, objectOffsets: inout [Int: Int], plan: FixtureObjectPlan,
+    extraEntries: [String: String]
+  ) -> Int {
+    switch self.xrefStyle {
+    case .classicTable:
+      self.writeBody(
+        into: &writer, objectOffsets: &objectOffsets,
+        contentsObjectNumber: plan.contentsObjectNumber
       )
+      if let contentStream, let contentsObjectNumber = plan.contentsObjectNumber {
+        self.writeContentStreamObject(
+          into: &writer, objectOffsets: &objectOffsets, objectNumber: contentsObjectNumber,
+          lengthObjectNumber: plan.lengthObjectNumber, spec: contentStream
+        )
+      }
+      let xrefOffset = writer.offset
+      self.writeXRefTable(into: &writer, objectOffsets: objectOffsets, totalObjects: plan.size)
+      self.writeTrailer(
+        into: &writer, xrefOffset: xrefOffset, totalObjects: plan.size,
+        prevOffset: nil, extraTrailerEntries: extraEntries
+      )
+      return xrefOffset
+    case .xrefStream:
+      let xrefOffset = self.writeXRefStreamStyleBody(
+        into: &writer, objectOffsets: &objectOffsets, plan: plan, prevOffset: nil,
+        extraTrailerEntries: extraEntries
+      )
+      Self.writeStartxrefFooter(into: &writer, xrefOffset: xrefOffset)
+      return xrefOffset
+    case .objectStreams:
+      let xrefOffset = self.writeObjectStreamsStyleBody(
+        into: &writer, objectOffsets: &objectOffsets, plan: plan, prevOffset: nil,
+        extraTrailerEntries: extraEntries
+      )
+      Self.writeStartxrefFooter(into: &writer, xrefOffset: xrefOffset)
+      return xrefOffset
+    case .hybrid:
+      let xrefOffset = self.writeHybridStyleBody(
+        into: &writer, objectOffsets: &objectOffsets, plan: plan, prevOffset: nil,
+        extraTrailerEntries: extraEntries
+      )
+      Self.writeStartxrefFooter(into: &writer, xrefOffset: xrefOffset)
+      return xrefOffset
     }
-
-    let xrefOffset = writer.offset
-    var totalObjects = self.pageCount + 3
-    if contentsObjectNumber != nil {
-      totalObjects += 1
-    }
-    if lengthObjectNumber != nil {
-      totalObjects += 1
-    }
-
-    self.writeXRefTable(
-      into: &writer,
-      objectOffsets: objectOffsets,
-      totalObjects: totalObjects
-    )
-    self.writeTrailer(into: &writer, xrefOffset: xrefOffset, totalObjects: totalObjects)
-
-    return PDFFixture(
-      data: Data(writer.bytes),
-      objectOffsets: objectOffsets,
-      xrefOffset: xrefOffset
-    )
   }
 
   /// PDF 헤더(버전 + 바이너리 마커 주석)를 기록한다.
-  private func writeHeader(into writer: inout PDFByteWriter) {
+  func writeHeader(into writer: inout PDFByteWriter) {
     writer.writeLine("%PDF-1.4")
     writer.write("%")
     writer.write(rawBytes: [0xE2, 0xE3, 0xCF, 0xD3])
@@ -115,7 +166,7 @@ package struct PDFFixtureBuilder: Sendable {
   ///
   /// `contentsObjectNumber`가 있으면 각 페이지 딕셔너리에 `/Contents N 0 R`를 추가한다
   /// (`nil`이면 v0와 바이트 동일 — 이 매개변수 자체가 조건부로만 출력에 영향을 준다).
-  private func writeBody(
+  func writeBody(
     into writer: inout PDFByteWriter,
     objectOffsets: inout [Int: Int],
     contentsObjectNumber: Int?
@@ -147,7 +198,7 @@ package struct PDFFixtureBuilder: Sendable {
   }
 
   /// 공유 콘텐츠 스트림 객체(및 `/Length`가 간접이면 그 정수 객체)를 기록한다.
-  private func writeContentStreamObject(
+  func writeContentStreamObject(
     into writer: inout PDFByteWriter,
     objectOffsets: inout [Int: Int],
     objectNumber: Int,
@@ -186,48 +237,6 @@ package struct PDFFixtureBuilder: Sendable {
     }
   }
 
-  /// 인코딩 하나를 순방향(인코딩 방향)으로 적용한다.
-  private static func applyEncoding(
-    _ encoding: ContentStreamSpec.Encoding, to data: Data
-  ) -> Data {
-    switch encoding {
-    case .flate:
-      return PDFFilterEncoders.flate(data)
-    case .asciiHex:
-      return PDFFilterEncoders.asciiHex(data)
-    case .ascii85:
-      return PDFFilterEncoders.ascii85(data)
-    case .runLength:
-      return PDFFilterEncoders.runLength(data)
-    }
-  }
-
-  /// 인코딩 종류에 대응하는 PDF 표준 필터 이름.
-  private static func filterName(for encoding: ContentStreamSpec.Encoding) -> String {
-    switch encoding {
-    case .flate:
-      return "/FlateDecode"
-    case .asciiHex:
-      return "/ASCIIHexDecode"
-    case .ascii85:
-      return "/ASCII85Decode"
-    case .runLength:
-      return "/RunLengthDecode"
-    }
-  }
-
-  /// `/Length`에 기록할 정수 값을 결정한다 (`.directWrong`은 의도적으로 어긋난 값).
-  private static func declaredLength(
-    for encoded: Data, style: ContentStreamSpec.LengthStyle
-  ) -> Int {
-    switch style {
-    case .direct, .indirect:
-      return encoded.count
-    case let .directWrong(delta):
-      return encoded.count + delta
-    }
-  }
-
   /// 클래식 xref 테이블(단일 서브섹션)을 기록한다. 엔트리는 CRLF 종결, 정확히 20바이트.
   private func writeXRefTable(
     into writer: inout PDFByteWriter,
@@ -250,13 +259,37 @@ package struct PDFFixtureBuilder: Sendable {
   }
 
   /// trailer, startxref, %%EOF 를 기록한다.
-  private func writeTrailer(
+  /// - Parameters:
+  ///   - writer: 기록 대상 바이트 조립기.
+  ///   - xrefOffset: `startxref`가 가리킬 오프셋.
+  ///   - totalObjects: `/Size` 값.
+  ///   - prevOffset: 증분 업데이트의 `/Prev` 값 (없으면 `nil`).
+  ///   - extraTrailerEntries: 트레일러에 덧붙일 원시 엔트리 (키 사전순 기록).
+  func writeTrailer(
     into writer: inout PDFByteWriter,
     xrefOffset: Int,
-    totalObjects: Int
+    totalObjects: Int,
+    prevOffset: Int? = nil,
+    extraTrailerEntries: [String: String] = [:]
   ) {
     writer.writeLine("trailer")
-    writer.writeLine("<< /Size \(totalObjects) /Root 1 0 R >>")
+    var parts = ["/Size \(totalObjects)", "/Root 1 0 R"]
+    if let prevOffset {
+      parts.append("/Prev \(prevOffset)")
+    }
+    for key in extraTrailerEntries.keys.sorted() {
+      parts.append("/\(key) \(extraTrailerEntries[key] ?? "")")
+    }
+    writer.writeLine("<< \(parts.joined(separator: " ")) >>")
+    writer.writeLine("startxref")
+    writer.writeLine("\(xrefOffset)")
+    writer.write("%%EOF")
+  }
+
+  /// `startxref`·오프셋·`%%EOF`만 기록한다 (트레일러가 없는 xref 스트림 스타일 전용 —
+  /// 클래식 스타일은 `writeTrailer(into:xrefOffset:totalObjects:prevOffset:extraTrailerEntries:)`가
+  /// 이 세 줄까지 포함해 기록한다).
+  static func writeStartxrefFooter(into writer: inout PDFByteWriter, xrefOffset: Int) {
     writer.writeLine("startxref")
     writer.writeLine("\(xrefOffset)")
     writer.write("%%EOF")
@@ -264,7 +297,7 @@ package struct PDFFixtureBuilder: Sendable {
 
   /// 10자리 zero-pad 오프셋 + 5자리 zero-pad 세대 + 타입 문자로 구성된 xref 엔트리 본문을
   /// 만든다 (CRLF는 호출부에서 덧붙인다).
-  private static func xrefEntry(offset: Int, generation: Int, type: Character) -> String {
+  static func xrefEntry(offset: Int, generation: Int, type: Character) -> String {
     let offsetText = String(format: "%010d", offset)
     let generationText = String(format: "%05d", generation)
     return "\(offsetText) \(generationText) \(type)"
@@ -272,7 +305,7 @@ package struct PDFFixtureBuilder: Sendable {
 
   /// MediaBox 좌표를 결정적으로 포맷팅한다: 정수면 소수점 없이, 아니면 소수점 이하 최대
   /// 2자리(뒤따르는 0 제거). 로케일에 의존하지 않는 정수 연산으로 구현한다.
-  private static func formatCoordinate(_ value: Double) -> String {
+  static func formatCoordinate(_ value: Double) -> String {
     let sign = value < 0 ? "-" : ""
     let scaled = (abs(value) * 100).rounded()
     let integerPart = Int64(scaled) / 100

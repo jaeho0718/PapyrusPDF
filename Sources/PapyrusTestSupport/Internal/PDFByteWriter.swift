@@ -1,7 +1,18 @@
 /// ASCII 기반 PDF 바이트 조립기. 현재 오프셋을 추적한다.
 struct PDFByteWriter {
   /// 지금까지 기록된 바이트.
-  private(set) var bytes: [UInt8] = []
+  private(set) var bytes: [UInt8]
+
+  /// 빈 조립기를 생성한다.
+  init() {
+    self.bytes = []
+  }
+
+  /// 기존 바이트 뒤에 이어 기록할 조립기를 생성한다 (증분 업데이트 덧붙임용).
+  /// - Parameter existingBytes: 이미 기록된 바이트.
+  init(existingBytes: [UInt8]) {
+    self.bytes = existingBytes
+  }
 
   /// 현재 기록 위치(= bytes.count). xref 오프셋 기록에 사용.
   var offset: Int {

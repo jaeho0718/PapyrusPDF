@@ -88,3 +88,49 @@ extension PDFFixtureBuilder {
 }
 
 // swiftlint:enable nesting
+
+// MARK: - 콘텐츠 스트림 인코딩 헬퍼 (파일 분리로 `PDFFixtureBuilder` 본체 길이 관리)
+
+extension PDFFixtureBuilder {
+  /// 인코딩 하나를 순방향(인코딩 방향)으로 적용한다.
+  static func applyEncoding(
+    _ encoding: ContentStreamSpec.Encoding, to data: Data
+  ) -> Data {
+    switch encoding {
+    case .flate:
+      return PDFFilterEncoders.flate(data)
+    case .asciiHex:
+      return PDFFilterEncoders.asciiHex(data)
+    case .ascii85:
+      return PDFFilterEncoders.ascii85(data)
+    case .runLength:
+      return PDFFilterEncoders.runLength(data)
+    }
+  }
+
+  /// 인코딩 종류에 대응하는 PDF 표준 필터 이름.
+  static func filterName(for encoding: ContentStreamSpec.Encoding) -> String {
+    switch encoding {
+    case .flate:
+      return "/FlateDecode"
+    case .asciiHex:
+      return "/ASCIIHexDecode"
+    case .ascii85:
+      return "/ASCII85Decode"
+    case .runLength:
+      return "/RunLengthDecode"
+    }
+  }
+
+  /// `/Length`에 기록할 정수 값을 결정한다 (`.directWrong`은 의도적으로 어긋난 값).
+  static func declaredLength(
+    for encoded: Data, style: ContentStreamSpec.LengthStyle
+  ) -> Int {
+    switch style {
+    case .direct, .indirect:
+      return encoded.count
+    case let .directWrong(delta):
+      return encoded.count + delta
+    }
+  }
+}
