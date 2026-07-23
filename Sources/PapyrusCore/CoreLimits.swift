@@ -58,4 +58,31 @@ package enum CoreLimits {
 
   /// XMP 메타데이터 스트림 최대 수용 바이트 (10MB — 초과 시 XMP 무시).
   package static let maxXMPMetadataBytes = 10 << 20
+
+  /// 페이지 텍스트 LRU 바이트 예산 (16MB).
+  package static let maxTextPageCacheBytes = 16 << 20
+
+  /// 폰트 캐시 항목 수 캡.
+  package static let maxLoadedFontEntries = 256
+
+  /// Form XObject 재귀 깊이 캡 (ARCHITECTURE.md: 16).
+  package static let maxFormXObjectDepth = 16
+
+  /// 페이지당 방출 글리프 상한 (병적 콘텐츠 폭주 가드).
+  package static let maxGlyphsPerPage = 500_000
+
+  /// 콘텐츠 오퍼랜드 스택 상한 (초과 시 오래된 것부터 폐기).
+  package static let maxContentOperands = 1_024
+
+  /// 콘텐츠 배열/딕셔너리 오퍼랜드 조립 깊이 캡.
+  package static let maxContentOperandDepth = 32
+
+  /// q/Q 그래픽 상태 스택 깊이 캡.
+  package static let maxGraphicsStateDepth = 256
+
+  /// CMap 엔트리(개별 char + range 항목 합) 상한.
+  package static let maxCMapEntries = 262_144
+
+  /// 페이지 1장 콘텐츠(폼 포함) 디코딩 총량 상한 (32MB — 초과 세그먼트는 절단).
+  package static let maxContentBytesPerPage = 32 << 20
 }

@@ -29,7 +29,7 @@ package struct FilterError: Error, Sendable, Equatable {
     /// `maxDecodedSize` 초과 (압축 폭탄 가드).
     case outputLimitExceeded
 
-    /// DCT/JPX/JBIG2/CCITT/LZW(M4 전) 등 미지원 필터.
+    /// DCT/JPX/JBIG2/CCITT 등 미지원 필터.
     case unsupportedFilter(COSName)
 
     /// 미지 Predictor 값.

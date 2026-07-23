@@ -81,6 +81,21 @@ public final class PapyrusDocument: Sendable {
     )
   }
 
+  /// 페이지 텍스트를 추출한다. 결과는 문서 전역 바이트 예산 LRU에 캐시되고,
+  /// 동시 요청은 페이지별 in-flight dedupe로 합류한다.
+  /// - Parameter index: 페이지 인덱스 (0 기반).
+  /// - Throws: 인덱스 이탈 시 ``PapyrusError/pageOutOfRange(index:pageCount:)``,
+  ///   콘텐츠 스트림이 미지원 필터를 쓰면 ``PapyrusError/unsupportedFilter(name:)``,
+  ///   구조 손상은 ``PapyrusError/damagedDocument``.
+  /// - Returns: 페이지 텍스트 스냅숏 (콘텐츠 없는 페이지는 빈 문자열).
+  public func text(forPage index: Int) async throws(PapyrusError) -> PageTextContent {
+    let snapshot = try await Self.mapErrors { try await self.core.pageTree() }
+    guard snapshot.records.indices.contains(index) else {
+      throw PapyrusError.pageOutOfRange(index: index, pageCount: snapshot.pageCount)
+    }
+    return try await Self.mapErrors { try await self.core.pageText(at: index) }
+  }
+
   /// untyped 내부 에러를 typed 공개 에러로 변환하는 경계 헬퍼.
   private static func mapErrors<Value: Sendable>(
     _ body: () async throws -> Value

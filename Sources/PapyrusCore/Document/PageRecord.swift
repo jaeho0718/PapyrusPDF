@@ -18,6 +18,10 @@ package struct PageRecord: Sendable, Equatable {
   /// M4 텍스트 파이프라인이 소비한다. M3 공개 API로는 노출되지 않는다.
   package let resources: COSObject?
 
+  /// /Contents 원값 (잎 노드 자신에서 포획, **미해소** — 보통 `.reference` 또는 `.array`).
+  /// /Contents는 상속 속성이 아니다 (M4 텍스트 파이프라인이 소비한다).
+  package let contents: COSObject?
+
   /// 페이지 레코드를 생성한다.
   /// - Parameters:
   ///   - objectNumber: 페이지 객체 번호 (인라인 kid면 `nil`).
@@ -25,14 +29,16 @@ package struct PageRecord: Sendable, Equatable {
   ///   - cropBox: 상속 해소·교집합 완료된 /CropBox.
   ///   - rotationDegrees: 정규화된 /Rotate 값 (0/90/180/270).
   ///   - resources: 상속 해소된 /Resources 원값 (미해소).
+  ///   - contents: 잎 노드 자신의 /Contents 원값 (미해소).
   package init(
     objectNumber: Int?, mediaBox: CGRect, cropBox: CGRect,
-    rotationDegrees: Int, resources: COSObject?
+    rotationDegrees: Int, resources: COSObject?, contents: COSObject? = nil
   ) {
     self.objectNumber = objectNumber
     self.mediaBox = mediaBox
     self.cropBox = cropBox
     self.rotationDegrees = rotationDegrees
     self.resources = resources
+    self.contents = contents
   }
 }

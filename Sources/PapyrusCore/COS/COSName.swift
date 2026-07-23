@@ -182,3 +182,114 @@ extension COSName {
   /// `/Version`.
   package static let version: COSName = "Version"
 }
+
+/// M4에서 필요한 표준 이름 상수 (텍스트 추출/폰트/CMap/LZW).
+extension COSName {
+  /// `/Contents`.
+  package static let contents: COSName = "Contents"
+
+  /// `/EarlyChange`.
+  package static let earlyChange: COSName = "EarlyChange"
+
+  /// `/Font`.
+  package static let font: COSName = "Font"
+
+  /// `/Subtype`.
+  package static let subtype: COSName = "Subtype"
+
+  /// `/BaseFont`.
+  package static let baseFont: COSName = "BaseFont"
+
+  /// `/Encoding`.
+  package static let encoding: COSName = "Encoding"
+
+  /// `/BaseEncoding`.
+  package static let baseEncoding: COSName = "BaseEncoding"
+
+  /// `/Differences`.
+  package static let differences: COSName = "Differences"
+
+  /// `/FirstChar`.
+  package static let firstChar: COSName = "FirstChar"
+
+  /// `/LastChar`.
+  package static let lastChar: COSName = "LastChar"
+
+  /// `/Widths`.
+  package static let widths: COSName = "Widths"
+
+  /// `/FontDescriptor`.
+  package static let fontDescriptor: COSName = "FontDescriptor"
+
+  /// `/Ascent`.
+  package static let ascent: COSName = "Ascent"
+
+  /// `/Descent`.
+  package static let descent: COSName = "Descent"
+
+  /// `/MissingWidth`.
+  package static let missingWidth: COSName = "MissingWidth"
+
+  /// `/ToUnicode`.
+  package static let toUnicode: COSName = "ToUnicode"
+
+  /// `/DescendantFonts`.
+  package static let descendantFonts: COSName = "DescendantFonts"
+
+  /// `/DW`.
+  package static let dw: COSName = "DW"
+
+  /// `/XObject`.
+  package static let xObject: COSName = "XObject"
+
+  /// `/Form`.
+  package static let form: COSName = "Form"
+
+  /// `/Matrix`.
+  package static let matrix: COSName = "Matrix"
+
+  /// `/BBox`.
+  package static let bbox: COSName = "BBox"
+
+  /// `/FontMatrix`.
+  package static let fontMatrix: COSName = "FontMatrix"
+
+  /// `/WMode`.
+  package static let wMode: COSName = "WMode"
+
+  /// `/L`.
+  package static let lKey: COSName = "L"
+
+  /// `/Identity-H`.
+  package static let identityH: COSName = "Identity-H"
+
+  /// `/Identity-V`.
+  package static let identityV: COSName = "Identity-V"
+
+  /// `/Type0`.
+  package static let type0: COSName = "Type0"
+
+  /// `/Type1`.
+  package static let type1: COSName = "Type1"
+
+  /// `/Type3`.
+  package static let type3: COSName = "Type3"
+
+  /// `/TrueType`.
+  package static let trueType: COSName = "TrueType"
+
+  /// `/MMType1`.
+  package static let mmType1: COSName = "MMType1"
+
+  /// `/WinAnsiEncoding`.
+  package static let winAnsiEncoding: COSName = "WinAnsiEncoding"
+
+  /// `/MacRomanEncoding`.
+  package static let macRomanEncoding: COSName = "MacRomanEncoding"
+
+  /// `/StandardEncoding`.
+  package static let standardEncoding: COSName = "StandardEncoding"
+
+  /// `/MacExpertEncoding`.
+  package static let macExpertEncoding: COSName = "MacExpertEncoding"
+}
