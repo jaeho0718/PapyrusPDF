@@ -47,7 +47,8 @@ Sources/
     Public/     PapyrusDocument.swift, Models.swift, PapyrusError.swift, TextSearch.swift
   PapyrusRendering/
     CGDocumentPool.swift, RenderWorker.swift, TileKey.swift, TileCache.swift,
-    PagePreviewCache.swift, TileRenderQueue.swift, MemoryPressure.swift
+    PagePreviewCache.swift, TileRenderQueue.swift, MemoryPressure.swift,
+    RenderingLimits.swift(한도 상수), RenderRequest.swift(우선순위 버퍼)
   PapyrusUI/
     Shared/     ReaderCore.swift, ReaderLayoutEngine.swift, PageLayerController.swift,
                 VisibleRangeCalculator.swift, HighlightOverlay.swift
@@ -113,7 +114,7 @@ Sources/
 - **CATiledLayer 대신 커스텀 타일링** — CATiledLayer는 동기 draw 콜백이라 액터 기반 비동기 렌더링과 충돌하고, 줌 페이드 아티팩트 + 캐시 제어 불가. 커스텀: 페이지당 프리뷰 레이어(전체 페이지 저해상도) 아래 + 512pt 타일 레이어들 위.
 - `TileKey`(pageIndex, scaleBucket, col, row). 줌 스케일은 √2 버킷으로 스냅 — 핀치 중엔 레이어 transform 확대(즉시·흐릿), 제스처 종료 시 재타일링.
 - `TileCache`: 바이트 비용 LRU, 예산 min(256MB, 물리메모리/8). `PagePreviewCache` 별도(작고 많이 유지 — 빠른 스크롤 체감의 핵심). Mutex(Synchronization) 기반 Sendable.
-- `TileRenderQueue`(actor): 우선순위(visible > prefetch > preview), in-flight dedupe, 가시 범위 이탈 시 Task 취소.
+- `TileRenderQueue`(actor): 우선순위 4등급(visiblePreview > visibleTile > prefetchTile > prefetchPreview — 보이는 페이지의 공백 방지가 최우선, 프리뷰 렌더는 타일보다 저렴), in-flight dedupe, 가시 범위 이탈 시 Task 취소.
 - 프리페치: 프리뷰는 visible ±3페이지, 타일은 visible ±0.5 뷰포트.
 - 메모리 압박: `DispatchSource.makeMemoryPressureSource` — warning 시 예산 반감, critical 시 타일 전량 퍼지.
 
