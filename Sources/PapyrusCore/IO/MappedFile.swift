@@ -17,6 +17,14 @@ package struct MappedFile: Sendable {
     self.data.count
   }
 
+  /// 전체 바이트의 무복사 뷰 (렌더링 타겟의 `CGDataProvider` 공급용).
+  ///
+  /// 반환값은 매핑/보유 원본과 저장소를 공유한다 (CoW — 읽기 전용 소비 전제).
+  /// 매핑 파일 절단 시 SIGBUS 한계는 이 타입 문서의 것과 동일하다.
+  package var contents: Data {
+    self.data
+  }
+
   /// 파일을 메모리맵으로 연다.
   /// - Parameter url: 열려는 파일의 위치.
   /// - Throws: 열기 실패 시 ``MappedFileError/openFailed(path:reason:)``.

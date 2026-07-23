@@ -98,9 +98,9 @@ public struct PageInfo: Sendable, Equatable {
 
   /// 회전을 반영한 표시 크기 (cropBox 기준) — M6 레이아웃 엔진의 입력.
   public var displaySize: CGSize {
-    let size = self.cropBox.size
-    return self.rotation.isQuarterTurn
-      ? CGSize(width: size.height, height: size.width) : size
+    PageGeometry.displaySize(
+      cropBoxSize: self.cropBox.size, normalizedRotationDegrees: self.rotation.rawValue
+    )
   }
 
   /// 페이지 정보를 생성한다.
