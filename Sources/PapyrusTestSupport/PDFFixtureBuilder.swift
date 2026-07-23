@@ -48,6 +48,23 @@ package struct PDFFixtureBuilder: Sendable {
   /// 제외)이며, 기록 시 키 이름 사전순으로 정렬해 결정적으로 출력한다.
   package var extraTrailerEntries: [String: String]
 
+  /// 페이지 트리 형태 명세. `nil`이면 기존 평탄 구조 (바이트 동일). 설정 시 `pageCount`는
+  /// 무시된다 (잎 수가 곧 페이지 수). `.classicTable` 전용 (가정 7).
+  package var pageTree: PageTreeSpec?
+
+  /// 목차 명세. `nil`이면 /Outlines 미기록 (바이트 동일). `.classicTable` 전용 (가정 7).
+  package var outline: OutlineSpec?
+
+  /// 이름 목적지 명세. `nil`이면 미기록. `.classicTable` 전용 (가정 7).
+  package var namedDestinations: NamedDestinationsSpec?
+
+  /// /Info 명세. `nil`이면 미기록. `.classicTable` 전용 (가정 7).
+  package var info: InfoSpec?
+
+  /// XMP 패킷 원문 (XML 문자열). 설정 시 Flate 스트림 + 카탈로그 /Metadata 참조 기록.
+  /// `.classicTable` 전용 (가정 7).
+  package var xmpMetadata: String?
+
   /// 빌더를 생성한다.
   /// - Parameters:
   ///   - pageCount: 생성할 페이지 수 (기본 1).
@@ -57,6 +74,11 @@ package struct PDFFixtureBuilder: Sendable {
   ///   - contentStream: 전 페이지가 공유하는 콘텐츠 스트림 (기본 `nil` — v0와 바이트 동일).
   ///   - updates: 증분 업데이트 목록 (기본 `[]` — v0와 바이트 동일).
   ///   - extraTrailerEntries: 트레일러에 추가할 원시 엔트리 (기본 `[:]`).
+  ///   - pageTree: 페이지 트리 형태 명세 (기본 `nil` — 기존 평탄 구조).
+  ///   - outline: 목차 명세 (기본 `nil` — 미기록).
+  ///   - namedDestinations: 이름 목적지 명세 (기본 `nil` — 미기록).
+  ///   - info: /Info 명세 (기본 `nil` — 미기록).
+  ///   - xmpMetadata: XMP 패킷 원문 (기본 `nil` — 미기록).
   package init(
     pageCount: Int = 1,
     pageWidth: Double = 612,
@@ -64,7 +86,12 @@ package struct PDFFixtureBuilder: Sendable {
     xrefStyle: XRefStyle = .classicTable,
     contentStream: ContentStreamSpec? = nil,
     updates: [IncrementalUpdateSpec] = [],
-    extraTrailerEntries: [String: String] = [:]
+    extraTrailerEntries: [String: String] = [:],
+    pageTree: PageTreeSpec? = nil,
+    outline: OutlineSpec? = nil,
+    namedDestinations: NamedDestinationsSpec? = nil,
+    info: InfoSpec? = nil,
+    xmpMetadata: String? = nil
   ) {
     self.pageCount = pageCount
     self.pageWidth = pageWidth
@@ -73,16 +100,31 @@ package struct PDFFixtureBuilder: Sendable {
     self.contentStream = contentStream
     self.updates = updates
     self.extraTrailerEntries = extraTrailerEntries
+    self.pageTree = pageTree
+    self.outline = outline
+    self.namedDestinations = namedDestinations
+    self.info = info
+    self.xmpMetadata = xmpMetadata
   }
 
   /// 설정대로 PDF 바이트를 생성한다.
   ///
   /// 순수 함수 — 같은 설정이면 항상 동일한 바이트를 반환한다(결정성).
-  /// - Precondition: `pageCount >= 0`, `pageWidth > 0`, `pageHeight > 0`.
+  /// - Precondition: `pageCount >= 0`, `pageWidth > 0`, `pageHeight > 0`. M3 신규 스펙
+  ///   (`pageTree`/`outline`/`namedDestinations`/`info`/`xmpMetadata`) 중 하나라도 설정되면
+  ///   `xrefStyle == .classicTable`, `contentStream == nil`, `updates.isEmpty`이어야 한다
+  ///   (가정 7 — 타 스타일·contentStream·updates와 동시 사용 시 precondition 실패).
   package func build() -> PDFFixture {
     precondition(self.pageCount >= 0, "pageCount는 0 이상이어야 한다.")
     precondition(self.pageWidth > 0, "pageWidth는 0보다 커야 한다.")
     precondition(self.pageHeight > 0, "pageHeight는 0보다 커야 한다.")
+
+    if self.usesM3Specs {
+      precondition(self.xrefStyle == .classicTable, "M3 신규 스펙은 .classicTable 전용이다.")
+      precondition(self.contentStream == nil, "M3 신규 스펙은 contentStream과 동시 사용할 수 없다.")
+      precondition(self.updates.isEmpty, "M3 신규 스펙은 updates와 동시 사용할 수 없다.")
+      return self.buildM3Fixture()
+    }
 
     var writer = PDFByteWriter()
     var objectOffsets: [Int: Int] = [:]
@@ -152,14 +194,6 @@ package struct PDFFixtureBuilder: Sendable {
       Self.writeStartxrefFooter(into: &writer, xrefOffset: xrefOffset)
       return xrefOffset
     }
-  }
-
-  /// PDF 헤더(버전 + 바이너리 마커 주석)를 기록한다.
-  func writeHeader(into writer: inout PDFByteWriter) {
-    writer.writeLine("%PDF-1.4")
-    writer.write("%")
-    writer.write(rawBytes: [0xE2, 0xE3, 0xCF, 0xD3])
-    writer.write(rawBytes: [0x0A])
   }
 
   /// Catalog, Pages, 페이지 객체 N개를 순서대로 기록하며 각 시작 오프셋을 저장한다.
@@ -323,5 +357,27 @@ package struct PDFFixtureBuilder: Sendable {
       fractionText.removeLast()
     }
     return "\(sign)\(integerPart).\(fractionText)"
+  }
+}
+
+// MARK: - M3 신규 스펙 조합 판정
+
+extension PDFFixtureBuilder {
+  /// M3 신규 스펙(페이지 트리/목차/이름 목적지/Info/XMP) 중 하나라도 설정되어 있는가.
+  var usesM3Specs: Bool {
+    self.pageTree != nil || self.outline != nil || self.namedDestinations != nil
+      || self.info != nil || self.xmpMetadata != nil
+  }
+}
+
+// MARK: - 헤더 기록 (struct 본체 길이 관리를 위해 extension으로 분리, 의미는 동일)
+
+extension PDFFixtureBuilder {
+  /// PDF 헤더(버전 + 바이너리 마커 주석)를 기록한다.
+  func writeHeader(into writer: inout PDFByteWriter) {
+    writer.writeLine("%PDF-1.4")
+    writer.write("%")
+    writer.write(rawBytes: [0xE2, 0xE3, 0xCF, 0xD3])
+    writer.write(rawBytes: [0x0A])
   }
 }

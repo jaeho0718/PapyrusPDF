@@ -12,7 +12,7 @@ package struct TrailerResolver: Sendable {
     /// 헤더 앞 정크 바이트 수 (== 파일 내 `%PDF` 시작 오프셋). 오프셋 보정에 사용됨.
     package let headerOffset: Int
     /// 축적된 열기 경고. 복구 스캔이 개입했다면 그 사실이 반드시 포함된다.
-    package let warnings: [OpenWarning]
+    package let warnings: [CoreOpenWarning]
 
     /// 산출물을 생성한다.
     /// - Parameters:
@@ -21,7 +21,7 @@ package struct TrailerResolver: Sendable {
     ///   - headerOffset: 헤더 앞 정크 바이트 수.
     ///   - warnings: 축적된 열기 경고.
     package init(
-      table: XRefTable, version: PDFVersion, headerOffset: Int, warnings: [OpenWarning]
+      table: XRefTable, version: PDFVersion, headerOffset: Int, warnings: [CoreOpenWarning]
     ) {
       self.table = table
       self.version = version
@@ -46,7 +46,7 @@ package struct TrailerResolver: Sendable {
   /// - Throws: ``DocumentOpenError`` (`notAPDF` / `damagedBeyondRecovery`).
   /// - Returns: 열기 단계의 최종 산출물.
   package func resolve() throws(DocumentOpenError) -> Resolution {
-    var warnings: [OpenWarning] = []
+    var warnings: [CoreOpenWarning] = []
 
     guard let headerOffset = Self.locateHeader(file: self.file) else {
       throw DocumentOpenError.notAPDF
@@ -88,7 +88,7 @@ package struct TrailerResolver: Sendable {
 
   /// 복구 스캔으로 폴백한다. 실패하면 `.damagedBeyondRecovery`.
   private static func recover(
-    file: MappedFile, version: PDFVersion, headerOffset: Int, priorWarnings: [OpenWarning]
+    file: MappedFile, version: PDFVersion, headerOffset: Int, priorWarnings: [CoreOpenWarning]
   ) throws(DocumentOpenError) -> Resolution {
     guard let rebuild = RecoveryScanner(file: file).rebuild() else {
       throw DocumentOpenError.damagedBeyondRecovery
@@ -120,7 +120,7 @@ extension TrailerResolver {
 
   /// `%PDF-M.N` 버전을 파싱한다. 위반 시 1.4로 폴백하고 경고를 남긴다.
   private static func parseVersion(
-    file: MappedFile, headerOffset: Int, warnings: inout [OpenWarning]
+    file: MappedFile, headerOffset: Int, warnings: inout [CoreOpenWarning]
   ) -> PDFVersion {
     let start = headerOffset + 5
     guard let (major, afterMajor) = Self.scanShortDigitRun(file: file, from: start),
@@ -206,7 +206,7 @@ extension TrailerResolver {
   /// 섹션 파싱 시도 결과 (bias 재시도 게이팅용).
   private enum SectionAttempt {
     /// 성공.
-    case success(section: XRefSection, warnings: [OpenWarning])
+    case success(section: XRefSection, warnings: [CoreOpenWarning])
     /// 두 파서 모두 "xref 섹션 자체가 아님"으로 실패 — bias 재시도 대상.
     case notRecognized
     /// 섹션으로 인식은 됐으나 내부 구조가 깨짐 — bias 재시도 무의미.
@@ -224,11 +224,11 @@ extension TrailerResolver {
   /// `/Prev` 체인을 순회하며 로드한다. 순환·상한·중간 실패를 부분 수용 규칙으로 처리한다.
   private static func loadChain(
     startOffset: Int, file: MappedFile, headerOffset: Int
-  ) -> (table: XRefTable, warnings: [OpenWarning]) {
+  ) -> (table: XRefTable, warnings: [CoreOpenWarning]) {
     var visited: Set<Int> = []
     var biasState = BiasState()
     var sectionsProcessed = 0
-    var warnings: [OpenWarning] = []
+    var warnings: [CoreOpenWarning] = []
     var collectedSections: [XRefSection] = []
     var pending: Int? = startOffset
     var recoveryNeeded = false
@@ -287,9 +287,9 @@ extension TrailerResolver {
     /// `/XRefStm` 없음 또는 이미 방문함.
     case none
     /// 파싱 성공 — 클래식보다 먼저 병합 순서에 넣어야 한다.
-    case found(section: XRefSection, warnings: [OpenWarning])
+    case found(section: XRefSection, warnings: [CoreOpenWarning])
     /// 파싱 실패 — 클래식 쪽이 있으므로 치명적이지 않다.
-    case unreadable(warning: OpenWarning)
+    case unreadable(warning: CoreOpenWarning)
   }
 
   /// 하이브리드 짝의 `/XRefStm`을 시도한다 (클래식 섹션보다 먼저 병합해야 하므로 분리 처리).
@@ -311,7 +311,7 @@ extension TrailerResolver {
 
   /// 수집된 섹션들을 최신 → 과거 순으로 병합해 최종 테이블을 만든다.
   private static func mergeAllSections(
-    _ sections: [XRefSection], bias: Int, fileCount: Int, warnings: inout [OpenWarning]
+    _ sections: [XRefSection], bias: Int, fileCount: Int, warnings: inout [CoreOpenWarning]
   ) -> XRefTable {
     var table = XRefTable()
     for section in sections {
@@ -327,7 +327,7 @@ extension TrailerResolver {
   /// `+headerOffset`으로 1회 재시도한다 (§3.2.1).
   private static func parseSectionWithBias(
     rawOffset: Int, file: MappedFile, headerOffset: Int,
-    biasState: inout BiasState, warnings: inout [OpenWarning]
+    biasState: inout BiasState, warnings: inout [CoreOpenWarning]
   ) -> XRefSection? {
     let primaryAttempt = Self.parseAnySection(at: rawOffset + biasState.value, file: file)
     if case let .success(section, sectionWarnings) = primaryAttempt {
@@ -369,7 +369,7 @@ extension TrailerResolver {
 
   /// 섹션의 `.uncompressed` 엔트리에 최종 bias를 반영하고, 파일 범위 밖 오프셋을 폐기한다.
   private static func biasedAndValidated(
-    _ section: XRefSection, bias: Int, fileCount: Int, warnings: inout [OpenWarning]
+    _ section: XRefSection, bias: Int, fileCount: Int, warnings: inout [CoreOpenWarning]
   ) -> XRefSection {
     var validated: [Int: XRefEntry] = [:]
     validated.reserveCapacity(section.entries.count)

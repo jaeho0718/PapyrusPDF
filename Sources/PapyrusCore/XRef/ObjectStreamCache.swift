@@ -68,8 +68,8 @@ package enum ObjectStreamDecoder {
   /// 컨테이너 스트림을 디코딩한다.
   ///
   /// - Note: `containerNumber` 파라미터는 설계 문서 r1(§2.3 개정 이력)에 반영된
-  ///   시그니처다 — 반환하는 ``OpenWarning/objectStreamMissingType(containerNumber:)`` /
-  ///   ``OpenWarning/objectStreamMemberOutOfBounds(containerNumber:objectNumber:)``가
+  ///   시그니처다 — 반환하는 ``CoreOpenWarning/objectStreamMissingType(containerNumber:)`` /
+  ///   ``CoreOpenWarning/objectStreamMemberOutOfBounds(containerNumber:objectNumber:)``가
   ///   컨테이너 번호를 요구하기 때문이다.
   /// - Parameters:
   ///   - raw: 컨테이너 스트림의 인코딩된 페이로드.
@@ -80,7 +80,7 @@ package enum ObjectStreamDecoder {
   /// - Returns: 디코딩된 컨테이너 + 축적 경고.
   package static func decode(
     raw: Data, dictionary: COSDictionary, containerNumber: Int
-  ) throws -> (container: DecodedObjectStream, warnings: [OpenWarning]) {
+  ) throws -> (container: DecodedObjectStream, warnings: [CoreOpenWarning]) {
     guard let memberCount = dictionary.integer(for: .nKey), memberCount >= 0,
       memberCount <= CoreLimits.maxObjectsPerObjectStream,
       let first = dictionary.integer(for: .first), first >= 0
@@ -88,7 +88,7 @@ package enum ObjectStreamDecoder {
       throw XRefError(code: .invalidStreamDictionary, offset: 0)
     }
 
-    var warnings: [OpenWarning] = []
+    var warnings: [CoreOpenWarning] = []
     if dictionary.name(for: .type) == nil {
       warnings.append(.objectStreamMissingType(containerNumber: containerNumber))
     }
@@ -126,7 +126,7 @@ package enum ObjectStreamDecoder {
   /// 헤더 쌍을 절대 오프셋 멤버 목록으로 변환한다. 범위 밖 멤버는 폐기 + 경고한다.
   private static func resolveMembers(
     headerPairs: [(objectNumber: Int, relativeOffset: Int)], first: Int, payloadCount: Int,
-    containerNumber: Int, warnings: inout [OpenWarning]
+    containerNumber: Int, warnings: inout [CoreOpenWarning]
   ) -> [(objectNumber: Int, offset: Int)] {
     var members: [(objectNumber: Int, offset: Int)] = []
     members.reserveCapacity(headerPairs.count)

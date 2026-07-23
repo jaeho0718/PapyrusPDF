@@ -16,7 +16,7 @@ package struct XRefTableParser: Sendable {
   /// - Throws: 구조 복원이 불가능하면 ``XRefError``.
   package func parseSection(
     at offset: Int
-  ) throws(XRefError) -> (section: XRefSection, warnings: [OpenWarning]) {
+  ) throws(XRefError) -> (section: XRefSection, warnings: [CoreOpenWarning]) {
     var lexer = COSLexer(file: self.file, offset: offset)
     guard let keywordToken = Self.nextTokenOrNil(&lexer), case .keyword(.xref) = keywordToken.token
     else {
@@ -24,7 +24,7 @@ package struct XRefTableParser: Sendable {
     }
 
     var entries: [Int: XRefEntry] = [:]
-    var warnings: [OpenWarning] = []
+    var warnings: [CoreOpenWarning] = []
     var totalEntryCount = 0
 
     while let header = try Self.parseSubsectionHeader(lexer: &lexer) {
@@ -77,7 +77,7 @@ package struct XRefTableParser: Sendable {
   /// 서브섹션의 `count`개 행을 관용 스캐너로 읽어 `entries`를 채운다.
   private func scanSubsection(
     start: Int, count: Int, lexer: inout COSLexer,
-    entries: inout [Int: XRefEntry], warnings: inout [OpenWarning]
+    entries: inout [Int: XRefEntry], warnings: inout [CoreOpenWarning]
   ) throws(XRefError) {
     var cursor = lexer.offset
     for relativeIndex in 0..<count {
@@ -95,7 +95,7 @@ package struct XRefTableParser: Sendable {
 
   /// `trailer` 키워드 직후 오프셋에서 트레일러 딕셔너리를 파싱한다.
   private func parseTrailer(
-    at offset: Int, warnings: inout [OpenWarning]
+    at offset: Int, warnings: inout [CoreOpenWarning]
   ) throws(XRefError) -> COSDictionary {
     var parser = COSParser(file: self.file)
     let parsed: COSObject
@@ -104,7 +104,7 @@ package struct XRefTableParser: Sendable {
     } catch {
       throw XRefError(code: .missingTrailer, offset: offset)
     }
-    warnings.append(contentsOf: parser.warnings.map(OpenWarning.parse))
+    warnings.append(contentsOf: parser.warnings.map(CoreOpenWarning.parse))
     guard case let .dictionary(dictionary) = parsed else {
       throw XRefError(code: .missingTrailer, offset: offset)
     }

@@ -1,6 +1,6 @@
 /// 문서 열기 중 축적된 관용 처리 신호. 에러로 승격되지 않은 이상 징후의 기록이다.
-/// M3에서 공개 `OpenWarning`(동명 public 타입)으로 매핑된다.
-package enum OpenWarning: Sendable, Equatable {
+/// M3에서 공개 `OpenWarning`(struct) 대분류로 매핑된다 (§4.2).
+package enum CoreOpenWarning: Sendable, Equatable {
   // MARK: - 헤더/꼬리
 
   /// `%PDF` 앞에 정크 바이트 존재 (offset == 헤더 시작 위치).

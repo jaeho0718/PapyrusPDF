@@ -17,13 +17,13 @@ package struct RecoveryScanner: Sendable {
   /// 같은 객체 번호가 여러 번 나오면 **나중 오프셋이 승리**한다 (증분 업데이트는 뒤에
   /// 덧붙으므로 뒤쪽이 최신).
   /// - Returns: 재구성 테이블 (+트레일러 후보 병합 결과) + 경고. /Root 후보조차 없으면 `nil`.
-  package func rebuild() -> (table: XRefTable, warnings: [OpenWarning])? {
+  package func rebuild() -> (table: XRefTable, warnings: [CoreOpenWarning])? {
     let scan = self.scanForCandidatesAndTrailers()
     guard !scan.candidates.isEmpty else {
       return nil
     }
 
-    var warnings: [OpenWarning] = [.rebuiltViaRecoveryScan]
+    var warnings: [CoreOpenWarning] = [.rebuiltViaRecoveryScan]
     var table = XRefTable()
     var topLevelEntries: [Int: XRefEntry] = [:]
     for (number, offset) in scan.candidates {
