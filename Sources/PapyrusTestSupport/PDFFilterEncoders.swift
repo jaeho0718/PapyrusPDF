@@ -86,6 +86,64 @@ package enum PDFFilterEncoders {
     return Data(out)
   }
 
+  /// PDF 가변폭 LZW 인코딩 (clear 코드 선행 + EOD 종결, `/EarlyChange` 지원).
+  ///
+  /// 코드 폭 갱신은 디코더(``LZWDecode``)의 갱신 시점(등록 이벤트 1개 지연)과 정확히
+  /// 맞물리도록, 자신의 등록 카운터에서 1을 뺀 값을 폭 판정에 쓴다 — 그래야 디코더가
+  /// 매 코드를 처리한 "직후"(자신의 등록 이벤트 이후)에 갱신하는 것과 인코더가 매 코드를
+  /// 방출한 "직후"(자신의 등록 이벤트 이후)에 갱신하는 것이 같은 스트림 위치에서 합의된다.
+  /// - Parameters:
+  ///   - data: 원본 바이트.
+  ///   - earlyChange: `/EarlyChange` (기본 `true`).
+  package static func lzw(_ data: Data, earlyChange: Bool = true) -> Data {
+    var table: [[UInt8]: Int] = [:]
+    var next = 258
+    var width = 9
+    var writer = LZWBitWriter()
+    writer.write(256, width: width)
+
+    var pending: [UInt8] = []
+    var firstEmitDone = false
+
+    func codeOf(_ sequence: [UInt8]) -> Int {
+      sequence.count == 1 ? Int(sequence[0]) : (table[sequence] ?? 0)
+    }
+    func bumpWidthIfNeeded() {
+      guard firstEmitDone else {
+        return
+      }
+      let effectiveNext = next - 1
+      if width < 12, effectiveNext + (earlyChange ? 1 : 0) == 1 << width {
+        width += 1
+      }
+    }
+
+    for byte in data {
+      let candidate = pending + [byte]
+      if candidate.count == 1 || table[candidate] != nil {
+        pending = candidate
+      } else {
+        writer.write(codeOf(pending), width: width)
+        if next < 4_096 {
+          table[candidate] = next
+          next += 1
+        }
+        bumpWidthIfNeeded()
+        firstEmitDone = true
+        pending = [byte]
+      }
+    }
+    if !pending.isEmpty {
+      writer.write(codeOf(pending), width: width)
+      if next < 4_096 {
+        next += 1
+      }
+      bumpWidthIfNeeded()
+    }
+    writer.write(257, width: width)
+    return writer.finish()
+  }
+
   /// PNG 행 필터 태그를 지정해 순방향 필터링 (디코더의 역적용 검증용).
   /// - Parameters:
   ///   - data: 원본(필터 미적용) 샘플 바이트.
@@ -121,6 +179,35 @@ package enum PDFFilterEncoders {
       previousRow = currentRow
     }
     return Data(out)
+  }
+}
+
+// MARK: - LZW용 MSB-first 비트 라이터
+
+/// ``PDFFilterEncoders/lzw(_:earlyChange:)`` 전용 MSB-first 비트 패커.
+private struct LZWBitWriter {
+  private var bitBuffer: UInt32 = 0
+  private var bitCount = 0
+  private var out: [UInt8] = []
+
+  mutating func write(_ value: Int, width: Int) {
+    self.bitBuffer = (self.bitBuffer << UInt32(width)) | UInt32(value)
+    self.bitCount += width
+    while self.bitCount >= 8 {
+      let shift = self.bitCount - 8
+      self.out.append(UInt8((self.bitBuffer >> UInt32(shift)) & 0xFF))
+      self.bitCount -= 8
+      self.bitBuffer &= self.bitCount == 0 ? 0 : (1 << UInt32(self.bitCount)) - 1
+    }
+  }
+
+  mutating func finish() -> Data {
+    if self.bitCount > 0 {
+      let shift = 8 - self.bitCount
+      self.out.append(UInt8((self.bitBuffer << UInt32(shift)) & 0xFF))
+      self.bitCount = 0
+    }
+    return Data(self.out)
   }
 }
 

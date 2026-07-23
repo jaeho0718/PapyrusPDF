@@ -139,6 +139,91 @@ public struct OutlineItem: Sendable, Equatable {
   // 내부 생성은 자동 합성된 memberwise init을 그대로 쓴다 (unneeded_synthesized_initializer).
 }
 
+/// PDF 페이지 공간의 사변형 (회전·기울임 텍스트를 표현하는 4점).
+///
+/// 꼭짓점 순서는 베이스라인 기준: 시작-아래(bottomLeft) → 끝-아래(bottomRight) →
+/// 끝-위(topRight) → 시작-위(topLeft). 축 정렬이 아닐 수 있다.
+public struct Quad: Sendable, Equatable {
+  /// 베이스라인 시작 쪽 아래 꼭짓점.
+  public let bottomLeft: CGPoint
+  /// 베이스라인 끝 쪽 아래 꼭짓점.
+  public let bottomRight: CGPoint
+  /// 베이스라인 끝 쪽 위 꼭짓점.
+  public let topRight: CGPoint
+  /// 베이스라인 시작 쪽 위 꼭짓점.
+  public let topLeft: CGPoint
+
+  /// 사변형을 생성한다.
+  /// - Parameters:
+  ///   - bottomLeft: 베이스라인 시작 쪽 아래 꼭짓점.
+  ///   - bottomRight: 베이스라인 끝 쪽 아래 꼭짓점.
+  ///   - topRight: 베이스라인 끝 쪽 위 꼭짓점.
+  ///   - topLeft: 베이스라인 시작 쪽 위 꼭짓점.
+  public init(bottomLeft: CGPoint, bottomRight: CGPoint, topRight: CGPoint, topLeft: CGPoint) {
+    self.bottomLeft = bottomLeft
+    self.bottomRight = bottomRight
+    self.topRight = topRight
+    self.topLeft = topLeft
+  }
+
+  /// 4점을 모두 포함하는 축 정렬 최소 사각형.
+  public var boundingRect: CGRect {
+    let xs = [self.bottomLeft.x, self.bottomRight.x, self.topRight.x, self.topLeft.x]
+    let ys = [self.bottomLeft.y, self.bottomRight.y, self.topRight.y, self.topLeft.y]
+    guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else {
+      return .zero
+    }
+    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+  }
+}
+
+/// 같은 텍스트 상태로 그려진 연속 글리프 묶음 하나의 스냅숏.
+public struct TextRun: Sendable, Equatable {
+  /// ``PageTextContent/string`` 안에서 이 run이 차지하는 UTF-16 코드유닛 구간.
+  public let range: Range<Int>
+  /// 페이지 공간 사변형 (ascent/descent 박스).
+  public let quad: Quad
+  /// UTF-16 코드유닛당 베이스라인 방향 전진량 (페이지 공간 단위).
+  /// `count == range.count`. 다중 유닛 글리프는 첫 유닛에 전액 귀속 (M4 설계 가정 3).
+  public let advances: [CGFloat]
+  /// Tr 3(투명 텍스트, OCR 레이어) 여부. 문자열에는 포함되고 표시만 안 된 텍스트다.
+  public let isInvisible: Bool
+
+  /// run을 생성한다.
+  /// - Parameters:
+  ///   - range: ``PageTextContent/string`` 안에서 이 run이 차지하는 UTF-16 코드유닛 구간.
+  ///   - quad: 페이지 공간 사변형.
+  ///   - advances: UTF-16 코드유닛당 베이스라인 방향 전진량.
+  ///   - isInvisible: Tr 3 여부.
+  public init(range: Range<Int>, quad: Quad, advances: [CGFloat], isInvisible: Bool) {
+    self.range = range
+    self.quad = quad
+    self.advances = advances
+    self.isInvisible = isInvisible
+  }
+}
+
+/// 페이지 하나의 텍스트 추출 결과 스냅숏.
+public struct PageTextContent: Sendable, Equatable {
+  /// 페이지 인덱스 (0 기반).
+  public let pageIndex: Int
+  /// 조립된 페이지 문자열 (읽기 순서 휴리스틱 적용, 공백/줄바꿈 삽입 완료).
+  public let string: String
+  /// run 목록. 삽입된 공백·줄바꿈은 어느 run에도 속하지 않는다.
+  public let runs: [TextRun]
+
+  /// 페이지 텍스트 스냅숏을 생성한다.
+  /// - Parameters:
+  ///   - pageIndex: 페이지 인덱스 (0 기반).
+  ///   - string: 조립된 페이지 문자열.
+  ///   - runs: run 목록.
+  public init(pageIndex: Int, string: String, runs: [TextRun]) {
+    self.pageIndex = pageIndex
+    self.string = string
+    self.runs = runs
+  }
+}
+
 // MARK: - 내부 경고 매핑 (§4.2)
 
 extension OpenWarning {

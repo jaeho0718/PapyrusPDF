@@ -27,6 +27,8 @@ extension PDFFixtureBuilder {
     package enum Encoding: Sendable {
       /// `/FlateDecode`.
       case flate
+      /// `/LZWDecode` (기본 `/EarlyChange` 1 — 미기록, 스펙 기본값과 일치).
+      case lzw
       /// `/ASCIIHexDecode`.
       case asciiHex
       /// `/ASCII85Decode`.
@@ -99,6 +101,8 @@ extension PDFFixtureBuilder {
     switch encoding {
     case .flate:
       return PDFFilterEncoders.flate(data)
+    case .lzw:
+      return PDFFilterEncoders.lzw(data)
     case .asciiHex:
       return PDFFilterEncoders.asciiHex(data)
     case .ascii85:
@@ -113,6 +117,8 @@ extension PDFFixtureBuilder {
     switch encoding {
     case .flate:
       return "/FlateDecode"
+    case .lzw:
+      return "/LZWDecode"
     case .asciiHex:
       return "/ASCIIHexDecode"
     case .ascii85:

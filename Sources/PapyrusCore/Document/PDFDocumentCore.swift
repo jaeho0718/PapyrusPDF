@@ -41,6 +41,24 @@ package actor PDFDocumentCore {
   /// 목차 구축이 실제로 실행된 횟수 (테스트 관찰용).
   var outlineBuildCount: Int
 
+  /// 페이지 텍스트 LRU (비용 = 추정 바이트, 예산 `CoreLimits.maxTextPageCacheBytes`).
+  var textPageCache: LRUCache<Int, PageTextContent>
+
+  /// 페이지별 in-flight 추출 태스크.
+  var inflightTextPages: [Int: Task<PageTextContent, Error>]
+
+  /// 폰트 캐시 (객체 번호 키, 항목 수 캡).
+  var fontCache: LRUCache<Int, LoadedFont>
+
+  /// 폰트별 in-flight 로딩 태스크.
+  var inflightFonts: [Int: Task<LoadedFont, Never>]
+
+  /// 텍스트 추출이 실제로 실행된 횟수 (dedupe 검증용 — 테스트 관찰용).
+  var textExtractionCount: Int
+
+  /// 폰트 빌드가 실제로 실행된 횟수 (테스트 관찰용).
+  var fontBuildCount: Int
+
   /// 열기 중 축적된 경고. 열기 이후 불변 (가정 4).
   package nonisolated let openWarnings: [CoreOpenWarning]
 
@@ -73,6 +91,12 @@ package actor PDFDocumentCore {
     self.pageTreeBuildCount = 0
     self.metadataBuildCount = 0
     self.outlineBuildCount = 0
+    self.textPageCache = LRUCache(costBudget: CoreLimits.maxTextPageCacheBytes)
+    self.inflightTextPages = [:]
+    self.fontCache = LRUCache(costBudget: CoreLimits.maxLoadedFontEntries)
+    self.inflightFonts = [:]
+    self.textExtractionCount = 0
+    self.fontBuildCount = 0
   }
 
   /// 파일을 연다. 헤더 검증 → xref 체인 로드 → 복구 폴백 → /Encrypt 감지 → /Root 검증.
@@ -211,7 +235,10 @@ package actor PDFDocumentCore {
       containerDecodeCount: self.containerDecodeCount,
       pageTreeBuildCount: self.pageTreeBuildCount,
       metadataBuildCount: self.metadataBuildCount,
-      outlineBuildCount: self.outlineBuildCount
+      outlineBuildCount: self.outlineBuildCount,
+      textExtractionCount: self.textExtractionCount,
+      fontBuildCount: self.fontBuildCount,
+      textPageCacheBytes: self.textPageCache.totalCost
     )
   }
 }
@@ -331,6 +358,15 @@ package struct CacheStatistics: Sendable, Equatable {
   /// 목차 구축이 실제로 실행된 횟수 (dedupe 검증용).
   package let outlineBuildCount: Int
 
+  /// 텍스트 추출이 실제로 실행된 횟수 (dedupe 검증용).
+  package let textExtractionCount: Int
+
+  /// 폰트 빌드가 실제로 실행된 횟수 (dedupe 검증용).
+  package let fontBuildCount: Int
+
+  /// 페이지 텍스트 LRU 적재 바이트.
+  package let textPageCacheBytes: Int
+
   /// 캐시 통계를 생성한다.
   /// - Parameters:
   ///   - objectCacheCount: 객체 LRU 적재 항목 수.
@@ -340,10 +376,14 @@ package struct CacheStatistics: Sendable, Equatable {
   ///   - pageTreeBuildCount: 페이지 트리 평탄화가 실제로 실행된 횟수.
   ///   - metadataBuildCount: 메타데이터 수집이 실제로 실행된 횟수.
   ///   - outlineBuildCount: 목차 구축이 실제로 실행된 횟수.
+  ///   - textExtractionCount: 텍스트 추출이 실제로 실행된 횟수.
+  ///   - fontBuildCount: 폰트 빌드가 실제로 실행된 횟수.
+  ///   - textPageCacheBytes: 페이지 텍스트 LRU 적재 바이트.
   package init(
     objectCacheCount: Int, objectStreamCacheBytes: Int, objectStreamCacheContainerCount: Int,
     containerDecodeCount: Int, pageTreeBuildCount: Int = 0, metadataBuildCount: Int = 0,
-    outlineBuildCount: Int = 0
+    outlineBuildCount: Int = 0, textExtractionCount: Int = 0, fontBuildCount: Int = 0,
+    textPageCacheBytes: Int = 0
   ) {
     self.objectCacheCount = objectCacheCount
     self.objectStreamCacheBytes = objectStreamCacheBytes
@@ -352,5 +392,8 @@ package struct CacheStatistics: Sendable, Equatable {
     self.pageTreeBuildCount = pageTreeBuildCount
     self.metadataBuildCount = metadataBuildCount
     self.outlineBuildCount = outlineBuildCount
+    self.textExtractionCount = textExtractionCount
+    self.fontBuildCount = fontBuildCount
+    self.textPageCacheBytes = textPageCacheBytes
   }
 }

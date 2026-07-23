@@ -62,7 +62,8 @@ extension PDFDocumentCore {
       let merged = try await self.mergedAttributes(for: frame)
       guard self.isIntermediateNode(frame.dictionary) else {
         self.appendLeafRecord(
-          number: frame.number, merged: merged, records: &records, indexByNumber: &indexByNumber
+          dictionary: frame.dictionary, number: frame.number, merged: merged, records: &records,
+          indexByNumber: &indexByNumber
         )
         continue
       }
@@ -130,8 +131,10 @@ extension PDFDocumentCore {
   }
 
   /// 잎 노드의 최종 `PageRecord`를 조립해 추가한다 (MediaBox 기본값·CropBox 교집합 관용 포함).
+  ///
+  /// `/Contents`는 잎 노드 자신에서만 읽는다 (상속 속성이 아니다 — M4 가정 1).
   private func appendLeafRecord(
-    number: Int?, merged: PageInheritedAttributes,
+    dictionary: COSDictionary, number: Int?, merged: PageInheritedAttributes,
     records: inout [PageRecord], indexByNumber: inout [Int: Int]
   ) {
     let mediaBox = merged.mediaBox ?? PageGeometry.defaultMediaBox
@@ -142,7 +145,7 @@ extension PDFDocumentCore {
     let record = PageRecord(
       objectNumber: number, mediaBox: mediaBox, cropBox: cropBox,
       rotationDegrees: PageGeometry.normalizedRotation(merged.rotationDegrees),
-      resources: merged.resources
+      resources: merged.resources, contents: dictionary[.contents]
     )
     if let number {
       indexByNumber[number] = records.count
