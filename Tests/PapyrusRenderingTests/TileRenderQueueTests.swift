@@ -97,11 +97,13 @@ struct TileRenderQueueTests {
   /// 취소하면 `.cancelled`가 던져지고 `droppedBeforeStartCount`가 늘며, 이미 대기
   /// 중이던 다른 요청들은 정상적으로 계속 렌더된다.
   ///
-  /// 정확한 타이밍을 단정하지 않기 위해(설계 §5 주의), 워커 1개로 처리할 수 없을
-  /// 만큼 큰 대기 백로그(조밀 스케일 버킷의 타일 100개)를 먼저 만들어 둔다 — 취소
-  /// 대상 키는 그 백로그의 맨 끝에 있으므로, 등재 직후 곧바로 취소해도 "아직
-  /// 시작 전(pending)" 상태를 안정적으로 포착한다(등재에 필요한 시간은 마이크로초
-  /// 단위, 백로그 전체 소진에는 그보다 몇 자릿수 긴 시간이 걸린다).
+  /// 정확한 타이밍을 단정하지 않기 위해(설계 §5 주의) 두 가지를 조합한다:
+  /// (1) 워커 1개로 처리할 수 없을 만큼 큰 대기 백로그(조밀 스케일 버킷의 타일 100개)를
+  /// 먼저 만들어 둔다 — 취소 대상 키는 그 백로그의 맨 끝이라, 취소를 거는 시점이 아무리
+  /// 늦어도 "이미 렌더까지 끝나버렸을" 여지가 없다. (2) 등재 자체가 취소보다 늦게
+  /// 일어나는 경합(요청 태스크가 아직 액터에 진입하기 전에 `cancel()`이 도착하는 경우)은
+  /// `registerWaiter`가 진입 시점에 `Task.isCancelled`를 직접 확인해 흡수하므로(구현 수정),
+  /// 등재 완료를 기다리는 별도 동기화 없이 생성 직후 곧바로 취소해도 결정적이다.
   @Test func cancellingBacklogTailWhileWorkerBusyDropsItBeforeStart() async throws {
     let queue = try await Self.makeQueue(
       pageCount: 1, pageWidth: 600, pageHeight: 600, workerCount: 1, pixelScale: 8
@@ -120,11 +122,9 @@ struct TileRenderQueueTests {
       scaleBucket: denseBucket, viewportSize: CGSize(width: 600, height: 600)
     ))
 
+    // 등재 완료를 기다리지 않고 생성 직후 곧바로 취소한다 — 등재보다 취소가 먼저
+    // 도착해도 registerWaiter의 Task.isCancelled 확인이 이를 올바르게 흡수한다.
     let tailTask = Task { try await queue.tile(for: tailKey) }
-    // 등재(액터 내 동기 처리)가 실제로 반영될 아주 짧은 여유만 준다.
-    for _ in 0..<5 {
-      await Task.yield()
-    }
     tailTask.cancel()
 
     var sawCancelled = false

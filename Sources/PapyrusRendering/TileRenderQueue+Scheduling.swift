@@ -29,9 +29,21 @@ extension TileRenderQueue {
   }
 
   /// 대기자를 등재하고, 최초 요청이면 대기 버퍼에 넣는다 (아니면 병합 카운트만 증가).
+  ///
+  /// 등재 직전에 `Task.isCancelled`를 확인한다 — `withTaskCancellationHandler`는 태스크가
+  /// 이 함수 진입 전에 이미 취소돼 있으면 `onCancel`을 즉시(= 이 등재보다 먼저) 실행하고
+  /// `operation`도 그대로 계속 진행시킨다(Swift 동시성 계약). 그 경우 `onCancel`의
+  /// `cancelWaiter`는 아직 등재되지 않은 대기자를 찾지 못해 조용히 없는 일이 되므로, 여기서
+  /// 별도로 취소를 잡지 않으면 취소가 유실되고 렌더가 완주해 버린다(가정 6 위반 — "시작 전
+  /// 취소"가 이 지점에서는 아직 시작 전이 맞다). 등재 자체를 생략하고 즉시 폐기 처리한다.
   private func registerWaiter(
     id: UUID, key: RenderRequestKey, priority: RenderPriority, continuation: RenderContinuation
   ) {
+    guard !Task.isCancelled else {
+      self.droppedBeforeStartCount += 1
+      continuation.resume(returning: .failure(.cancelled))
+      return
+    }
     self.waiters[key, default: [:]][id] = continuation
     self.externallyWaited.insert(key)
     if self.inFlight.contains(key) {
