@@ -112,4 +112,20 @@ package enum PageGeometry {
     let remainder = raw % 360
     return remainder < 0 ? remainder + 360 : remainder
   }
+
+  /// 회전을 반영한 표시 크기 (cropBox 기준, 90/270이면 가로·세로 교환).
+  ///
+  /// ``PageRecord/displaySize`` 공개 `PageInfo.displaySize`가 공유하는 정의다 —
+  /// 렌더링·뷰어가 파서 기하를 진실 원천으로 공유하기 위한 단일 계산점(M5 편차 표).
+  /// - Parameters:
+  ///   - cropBoxSize: /CropBox의 크기 (회전 반영 전).
+  ///   - normalizedRotationDegrees: 정규화된 /Rotate 값 (0/90/180/270).
+  /// - Returns: 회전 반영 표시 크기.
+  package static func displaySize(
+    cropBoxSize: CGSize, normalizedRotationDegrees: Int
+  ) -> CGSize {
+    let isQuarterTurn = normalizedRotationDegrees == 90 || normalizedRotationDegrees == 270
+    return isQuarterTurn
+      ? CGSize(width: cropBoxSize.height, height: cropBoxSize.width) : cropBoxSize
+  }
 }

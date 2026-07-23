@@ -42,3 +42,15 @@ package struct PageRecord: Sendable, Equatable {
     self.contents = contents
   }
 }
+
+extension PageRecord {
+  /// 회전을 반영한 표시 크기 (cropBox 기준, 90/270이면 가로·세로 교환).
+  ///
+  /// 공개 `PageInfo.displaySize`와 정의가 동일하다 — 렌더링·뷰어가 파서 기하를
+  /// 진실 원천으로 공유하기 위한 package 접근점.
+  package var displaySize: CGSize {
+    PageGeometry.displaySize(
+      cropBoxSize: self.cropBox.size, normalizedRotationDegrees: self.rotationDegrees
+    )
+  }
+}

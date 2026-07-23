@@ -5,8 +5,8 @@ import Foundation
 /// 소유물: 맵 파일(불변), xref 테이블(불변), 객체 LRU, ObjStm 컨테이너 LRU,
 /// 컨테이너 in-flight 태스크 맵. CPU 무거운 압축 해제는 `@concurrent`로 액터 밖 실행.
 package actor PDFDocumentCore {
-  /// 맵 파일. 열기 이후 불변.
-  let file: MappedFile
+  /// 맵 파일. 열기 이후 불변. `MappedFile`은 Sendable이므로 격리 완화가 안전하다.
+  nonisolated let file: MappedFile
 
   /// 병합 완료된 xref 테이블. 열기 이후 불변.
   let xref: XRefTable
@@ -70,6 +70,13 @@ package actor PDFDocumentCore {
 
   /// 문자열·스트림 복호화 심. v1은 항상 ``IdentitySecurityHandler``.
   package nonisolated let securityHandler: any SecurityHandler
+
+  /// 원본 문서 바이트 (렌더링 타겟이 `CGPDFDocument` 생성에 사용).
+  ///
+  /// 열기 방식(url/data)과 무관하게 항상 매핑/보유된 동일 바이트를 돌려준다.
+  package nonisolated var sourceBytes: Data {
+    self.file.contents
+  }
 
   /// 완성된 불변 상태로 액터를 생성한다 (열기 플로우 전용 — 외부에는 `open`만 노출한다).
   private init(
@@ -332,68 +339,5 @@ extension PDFDocumentCore {
     default:
       return .detected(filterName: nil)
     }
-  }
-}
-
-/// 캐시 관찰 스냅숏 (테스트 전용 소비).
-package struct CacheStatistics: Sendable, Equatable {
-  /// 객체 LRU 적재 항목 수.
-  package let objectCacheCount: Int
-
-  /// ObjStm 캐시 적재 바이트.
-  package let objectStreamCacheBytes: Int
-
-  /// ObjStm 캐시 적재 컨테이너 수.
-  package let objectStreamCacheContainerCount: Int
-
-  /// 누적 컨테이너 압축 해제 횟수 (in-flight dedupe 검증용 — 캐시 히트면 늘지 않는다).
-  package let containerDecodeCount: Int
-
-  /// 페이지 트리 평탄화가 실제로 실행된 횟수 (dedupe 검증용).
-  package let pageTreeBuildCount: Int
-
-  /// 메타데이터 수집이 실제로 실행된 횟수 (dedupe 검증용).
-  package let metadataBuildCount: Int
-
-  /// 목차 구축이 실제로 실행된 횟수 (dedupe 검증용).
-  package let outlineBuildCount: Int
-
-  /// 텍스트 추출이 실제로 실행된 횟수 (dedupe 검증용).
-  package let textExtractionCount: Int
-
-  /// 폰트 빌드가 실제로 실행된 횟수 (dedupe 검증용).
-  package let fontBuildCount: Int
-
-  /// 페이지 텍스트 LRU 적재 바이트.
-  package let textPageCacheBytes: Int
-
-  /// 캐시 통계를 생성한다.
-  /// - Parameters:
-  ///   - objectCacheCount: 객체 LRU 적재 항목 수.
-  ///   - objectStreamCacheBytes: ObjStm 캐시 적재 바이트.
-  ///   - objectStreamCacheContainerCount: ObjStm 캐시 적재 컨테이너 수.
-  ///   - containerDecodeCount: 누적 컨테이너 압축 해제 횟수.
-  ///   - pageTreeBuildCount: 페이지 트리 평탄화가 실제로 실행된 횟수.
-  ///   - metadataBuildCount: 메타데이터 수집이 실제로 실행된 횟수.
-  ///   - outlineBuildCount: 목차 구축이 실제로 실행된 횟수.
-  ///   - textExtractionCount: 텍스트 추출이 실제로 실행된 횟수.
-  ///   - fontBuildCount: 폰트 빌드가 실제로 실행된 횟수.
-  ///   - textPageCacheBytes: 페이지 텍스트 LRU 적재 바이트.
-  package init(
-    objectCacheCount: Int, objectStreamCacheBytes: Int, objectStreamCacheContainerCount: Int,
-    containerDecodeCount: Int, pageTreeBuildCount: Int = 0, metadataBuildCount: Int = 0,
-    outlineBuildCount: Int = 0, textExtractionCount: Int = 0, fontBuildCount: Int = 0,
-    textPageCacheBytes: Int = 0
-  ) {
-    self.objectCacheCount = objectCacheCount
-    self.objectStreamCacheBytes = objectStreamCacheBytes
-    self.objectStreamCacheContainerCount = objectStreamCacheContainerCount
-    self.containerDecodeCount = containerDecodeCount
-    self.pageTreeBuildCount = pageTreeBuildCount
-    self.metadataBuildCount = metadataBuildCount
-    self.outlineBuildCount = outlineBuildCount
-    self.textExtractionCount = textExtractionCount
-    self.fontBuildCount = fontBuildCount
-    self.textPageCacheBytes = textPageCacheBytes
   }
 }
