@@ -41,7 +41,7 @@ Papyrus                 ← 엄브렐러: 위 세 모듈을 재노출
   추출하고, 텍스트 검색을 제공합니다. Core Graphics나 SwiftUI에 의존하지 않는
   독립적인 계층으로, 서버 사이드 텍스트 추출처럼 화면이 필요 없는 용도로도 단독
   사용할 수 있습니다.
-- **PapyrusRendering** 은 `PapyrusCore`가 해석한 페이지 지오메트리를 받아 실제
+- **`PapyrusRendering`** 은 `PapyrusCore`가 해석한 페이지 지오메트리를 받아 실제
   픽셀(타일 이미지)을 생성하고 캐싱합니다. 뷰어 없이 특정 페이지의 썸네일이나
   프리뷰 이미지만 필요한 경우에도 이 계층만으로 충분합니다.
 - **`PapyrusUI`** 는 `PapyrusRendering`이 만든 타일을 SwiftUI 뷰로 조립합니다.
