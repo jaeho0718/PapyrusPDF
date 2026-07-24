@@ -1,51 +1,51 @@
 import Foundation
 
-/// 텍스트 검색 옵션.
+/// 텍스트 검색 옵션입니다.
 ///
-/// 기본값은 대소문자·발음 구별 부호 무시다 (뷰어 검색 관례).
+/// 기본값은 대소문자·발음 구별 부호 무시입니다 (뷰어 검색 관례).
 public struct SearchOptions: Sendable, Equatable {
-  /// 대소문자를 구별한다 (기본 `false`).
+  /// 대소문자를 구별합니다 (기본 `false`).
   public var caseSensitive: Bool
 
-  /// 발음 구별 부호(diacritic)를 구별한다 (기본 `false` — `"cafe"`가 `"café"`에 매치).
+  /// 발음 구별 부호(diacritic)를 구별합니다 (기본 `false` — `"cafe"`가 `"café"`에 매치).
   public var diacriticSensitive: Bool
 
-  /// 검색 옵션을 생성한다.
+  /// 검색 옵션을 생성합니다.
   /// - Parameters:
-  ///   - caseSensitive: 대소문자 구별 여부 (기본 `false`).
-  ///   - diacriticSensitive: 발음 구별 부호 구별 여부 (기본 `false`).
+  ///   - caseSensitive: 대소문자 구별 여부입니다 (기본 `false`).
+  ///   - diacriticSensitive: 발음 구별 부호 구별 여부입니다 (기본 `false`).
   public init(caseSensitive: Bool = false, diacriticSensitive: Bool = false) {
     self.caseSensitive = caseSensitive
     self.diacriticSensitive = diacriticSensitive
   }
 }
 
-/// 검색 매치 하나의 스냅숏.
+/// 검색 매치 하나의 스냅숏입니다.
 public struct SearchResult: Sendable, Equatable {
-  /// 매치가 있는 페이지 인덱스 (0 기반).
+  /// 매치가 있는 페이지 인덱스입니다 (0 기반).
   public let pageIndex: Int
 
-  /// 해당 페이지 ``PageTextContent/string``의 UTF-16 코드유닛 구간 (원문 오프셋 —
-  /// 대소문자·발음 부호 폴딩으로 길이가 변해도 이 구간은 원문 좌표계를 유지한다).
+  /// 해당 페이지 ``PageTextContent/string``의 UTF-16 코드유닛 구간입니다 (원문 오프셋 —
+  /// 대소문자·발음 부호 폴딩으로 길이가 변해도 이 구간은 원문 좌표계를 유지합니다).
   public let range: Range<Int>
 
-  /// PDF 페이지 공간 quad들 — 교차한 run당 1개 (줄바꿈을 걸치면 여러 개).
-  /// 매치가 조립 삽입 공백·줄바꿈에만 걸리면 빈 배열일 수 있다.
+  /// PDF 페이지 공간 quad들입니다 — 교차한 run당 1개 (줄바꿈을 걸치면 여러 개).
+  /// 매치가 조립 삽입 공백·줄바꿈에만 걸리면 빈 배열일 수 있습니다.
   public let quads: [Quad]
 
-  /// 매치 전후 문맥 발췌 (개행·탭은 공백으로 치환, 문자 경계 스냅).
+  /// 매치 전후 문맥 발췌입니다 (개행·탭은 공백으로 치환, 문자 경계 스냅).
   public let snippet: String
 
-  /// `snippet` 안에서 매치가 차지하는 UTF-16 구간 (UI 강조용).
+  /// `snippet` 안에서 매치가 차지하는 UTF-16 구간입니다 (UI 강조용).
   public let snippetMatchRange: Range<Int>
 
-  /// 검색 매치 스냅숏을 생성한다.
+  /// 검색 매치 스냅숏을 생성합니다.
   /// - Parameters:
-  ///   - pageIndex: 매치가 있는 페이지 인덱스 (0 기반).
-  ///   - range: 페이지 문자열 안의 UTF-16 코드유닛 구간.
-  ///   - quads: PDF 페이지 공간 quad들.
-  ///   - snippet: 매치 전후 문맥 발췌.
-  ///   - snippetMatchRange: `snippet` 안에서 매치가 차지하는 UTF-16 구간.
+  ///   - pageIndex: 매치가 있는 페이지 인덱스입니다 (0 기반).
+  ///   - range: 페이지 문자열 안의 UTF-16 코드유닛 구간입니다.
+  ///   - quads: PDF 페이지 공간 quad들입니다.
+  ///   - snippet: 매치 전후 문맥 발췌입니다.
+  ///   - snippetMatchRange: `snippet` 안에서 매치가 차지하는 UTF-16 구간입니다.
   public init(
     pageIndex: Int, range: Range<Int>, quads: [Quad], snippet: String,
     snippetMatchRange: Range<Int>
@@ -59,19 +59,19 @@ public struct SearchResult: Sendable, Equatable {
 }
 
 extension PapyrusDocument {
-  /// 문서 전체에서 `query`를 검색한다. 결과는 **페이지 오름차순, 페이지 안에서는
-  /// 위치 오름차순**으로 방출된다. 텍스트 추출은 내부적으로 병렬 워밍업된다.
+  /// 문서 전체에서 `query`를 검색합니다. 결과는 **페이지 오름차순, 페이지 안에서는
+  /// 위치 오름차순**으로 방출됩니다. 텍스트 추출은 내부적으로 병렬 워밍업됩니다.
   ///
-  /// - 공백뿐이거나 빈 query는 결과 없이 즉시 종료한다.
-  /// - 페이지 하나의 추출 실패(손상·미지원 필터)는 그 페이지만 건너뛴다.
-  ///   문서 수준 실패(페이지 트리 해소 불가)만 스트림을 throw로 종료한다.
-  /// - 소비자가 for-await를 이탈(취소)하면 내부 작업도 취소된다.
+  /// - 공백뿐이거나 빈 query는 결과 없이 즉시 종료합니다.
+  /// - 페이지 하나의 추출 실패(손상·미지원 필터)는 그 페이지만 건너뜁니다.
+  ///   문서 수준 실패(페이지 트리 해소 불가)만 스트림을 throw로 종료합니다.
+  /// - 소비자가 for-await를 이탈(취소)하면 내부 작업도 취소됩니다.
   /// - Parameters:
-  ///   - query: 검색어.
-  ///   - options: 검색 옵션 (기본값 — 대소문자·발음 부호 무시).
+  ///   - query: 검색어입니다.
+  ///   - options: 검색 옵션입니다 (기본값 — 대소문자·발음 부호 무시).
   /// - Throws(스트림 종료 에러): ``PapyrusError`` (`Error`로 소거 — AsyncThrowingStream
-  ///   실패 타입 제약. 실제 타입은 항상 `PapyrusError`임을 문서화).
-  /// - Returns: 매치를 순서대로 방출하는 비동기 스트림.
+  ///   실패 타입 제약. 실제 타입은 항상 `PapyrusError`임을 문서화합니다).
+  /// - Returns: 매치를 순서대로 방출하는 비동기 스트림입니다.
   public func search(
     _ query: String, options: SearchOptions = SearchOptions()
   ) -> AsyncThrowingStream<SearchResult, Error> {

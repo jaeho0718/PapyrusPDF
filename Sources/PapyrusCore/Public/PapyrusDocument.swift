@@ -1,14 +1,14 @@
 import Foundation
 
-/// 열린 PDF 문서. `PDFDocumentCore` 액터를 감싼 Sendable 퍼사드다.
+/// 열린 PDF 문서입니다. `PDFDocumentCore` 액터를 감싼 Sendable 퍼사드입니다.
 ///
-/// 모든 getter는 async이며 반환값은 전부 Sendable 스냅숏 값 타입이다 (ARCHITECTURE.md
-/// 동시성 모델). 무거운 계산(페이지 트리 평탄화 등)은 첫 접근 시 1회 수행 후 캐시된다.
+/// 모든 getter는 async이며 반환값은 전부 Sendable 스냅숏 값 타입입니다 (ARCHITECTURE.md
+/// 동시성 모델). 무거운 계산(페이지 트리 평탄화 등)은 첫 접근 시 1회 수행 후 캐시됩니다.
 public final class PapyrusDocument: Sendable {
   /// 내부 코어 액터 (M4~M7 확장이 같은 코어를 소비한다).
   package let core: PDFDocumentCore
 
-  /// 열기 중 축적된 경고 (열기 이후 불변 — 동기 접근 가능).
+  /// 열기 중 축적된 경고입니다 (열기 이후 불변 — 동기 접근 가능).
   public let openWarnings: [OpenWarning]
 
   /// 완성된 상태로 퍼사드를 생성한다 (열기 플로우 전용).
@@ -17,11 +17,11 @@ public final class PapyrusDocument: Sendable {
     self.openWarnings = openWarnings
   }
 
-  /// 파일 URL로 문서를 연다.
-  /// - Parameter url: 열려는 PDF 파일의 위치.
+  /// 파일 URL로 문서를 엽니다.
+  /// - Parameter url: 열려는 PDF 파일의 위치입니다.
   /// - Throws: ``PapyrusError/notAPDF``, ``PapyrusError/ioError(message:)``,
-  ///   ``PapyrusError/encryptedDocument(filterName:)``, ``PapyrusError/damagedDocument``.
-  /// - Returns: 열린 문서.
+  ///   ``PapyrusError/encryptedDocument(filterName:)``, ``PapyrusError/damagedDocument``입니다.
+  /// - Returns: 열린 문서입니다.
   public static func open(url: URL) async throws(PapyrusError) -> PapyrusDocument {
     do {
       let core = try await PDFDocumentCore.open(url: url)
@@ -31,10 +31,10 @@ public final class PapyrusDocument: Sendable {
     }
   }
 
-  /// 인메모리 바이트로 문서를 연다.
-  /// - Parameter data: 열려는 PDF 바이트.
-  /// - Throws: ``open(url:)``와 동일 (단 `ioError`는 발생하지 않는다).
-  /// - Returns: 열린 문서.
+  /// 인메모리 바이트로 문서를 엽니다.
+  /// - Parameter data: 열려는 PDF 바이트입니다.
+  /// - Throws: ``open(url:)``와 동일합니다 (단 `ioError`는 발생하지 않습니다).
+  /// - Returns: 열린 문서입니다.
   public static func open(data: Data) async throws(PapyrusError) -> PapyrusDocument {
     do {
       let core = try await PDFDocumentCore.open(data: data)
@@ -44,31 +44,31 @@ public final class PapyrusDocument: Sendable {
     }
   }
 
-  /// 페이지 수 (실측 — /Count 주장값이 아니다). 첫 접근 시 페이지 트리를 평탄화한다.
+  /// 페이지 수입니다 (실측 — /Count 주장값이 아닙니다). 첫 접근 시 페이지 트리를 평탄화합니다.
   public var pageCount: Int {
     get async throws(PapyrusError) {
       try await Self.mapErrors { try await self.core.pageTree().pageCount }
     }
   }
 
-  /// 문서 메타데이터 (첫 접근 시 계산 후 캐시).
+  /// 문서 메타데이터입니다 (첫 접근 시 계산 후 캐시).
   public var metadata: DocumentMetadata {
     get async throws(PapyrusError) {
       try await Self.mapErrors { try await self.core.documentMetadata() }
     }
   }
 
-  /// 목차 (부재 시 빈 배열, 첫 접근 시 계산 후 캐시).
+  /// 목차입니다 (부재 시 빈 배열, 첫 접근 시 계산 후 캐시).
   public var outline: [OutlineItem] {
     get async throws(PapyrusError) {
       try await Self.mapErrors { try await self.core.outlineItems() }
     }
   }
 
-  /// 페이지 기하 정보를 반환한다. 첫 호출이 평탄화를 유발하고 이후는 O(1)이다.
-  /// - Parameter index: 조회할 페이지 인덱스 (0 기반).
-  /// - Throws: 인덱스 이탈 시 ``PapyrusError/pageOutOfRange(index:pageCount:)``.
-  /// - Returns: 해당 페이지의 기하 정보.
+  /// 페이지 기하 정보를 반환합니다. 첫 호출이 평탄화를 유발하고 이후는 O(1)입니다.
+  /// - Parameter index: 조회할 페이지 인덱스입니다 (0 기반).
+  /// - Throws: 인덱스 이탈 시 ``PapyrusError/pageOutOfRange(index:pageCount:)``입니다.
+  /// - Returns: 해당 페이지의 기하 정보입니다.
   public func page(at index: Int) async throws(PapyrusError) -> PageInfo {
     let snapshot = try await Self.mapErrors { try await self.core.pageTree() }
     guard snapshot.records.indices.contains(index) else {
@@ -81,13 +81,13 @@ public final class PapyrusDocument: Sendable {
     )
   }
 
-  /// 페이지 텍스트를 추출한다. 결과는 문서 전역 바이트 예산 LRU에 캐시되고,
-  /// 동시 요청은 페이지별 in-flight dedupe로 합류한다.
-  /// - Parameter index: 페이지 인덱스 (0 기반).
+  /// 페이지 텍스트를 추출합니다. 결과는 문서 전역 바이트 예산 LRU에 캐시되고,
+  /// 동시 요청은 페이지별 in-flight dedupe로 합류합니다.
+  /// - Parameter index: 페이지 인덱스입니다 (0 기반).
   /// - Throws: 인덱스 이탈 시 ``PapyrusError/pageOutOfRange(index:pageCount:)``,
   ///   콘텐츠 스트림이 미지원 필터를 쓰면 ``PapyrusError/unsupportedFilter(name:)``,
-  ///   구조 손상은 ``PapyrusError/damagedDocument``.
-  /// - Returns: 페이지 텍스트 스냅숏 (콘텐츠 없는 페이지는 빈 문자열).
+  ///   구조 손상은 ``PapyrusError/damagedDocument``입니다.
+  /// - Returns: 페이지 텍스트 스냅숏입니다 (콘텐츠 없는 페이지는 빈 문자열).
   public func text(forPage index: Int) async throws(PapyrusError) -> PageTextContent {
     let snapshot = try await Self.mapErrors { try await self.core.pageTree() }
     guard snapshot.records.indices.contains(index) else {

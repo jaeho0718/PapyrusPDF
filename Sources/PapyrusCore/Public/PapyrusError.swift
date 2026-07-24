@@ -1,31 +1,31 @@
 import Foundation
 
-/// Papyrus의 유일한 공개 에러 도메인. 모든 공개 API는 `throws(PapyrusError)`다.
+/// Papyrus의 유일한 공개 에러 도메인입니다. 모든 공개 API는 `throws(PapyrusError)`입니다.
 public enum PapyrusError: Error, Sendable, Equatable {
-  /// 입력이 PDF가 아니다 (선두 1KB에 `%PDF-` 헤더 없음).
+  /// 입력이 PDF가 아닙니다 (선두 1KB에 `%PDF-` 헤더 없음).
   case notAPDF
 
-  /// 파일 열기/매핑 I/O 실패. `message`는 진단용 설명이다.
+  /// 파일 열기/매핑 I/O 실패입니다. `message`는 진단용 설명입니다.
   case ioError(message: String)
 
-  /// 암호화 문서 — v1은 지원하지 않는다. `filterName`은 /Encrypt /Filter 진단값.
+  /// 암호화 문서입니다 — v1은 지원하지 않습니다. `filterName`은 /Encrypt /Filter 진단값입니다.
   case encryptedDocument(filterName: String?)
 
-  /// 구조 손상으로 복구 불능이거나, 필수 구조(페이지 트리 루트 등) 해소가 불가능하다.
+  /// 구조 손상으로 복구 불능이거나, 필수 구조(페이지 트리 루트 등) 해소가 불가능합니다.
   case damagedDocument
 
-  /// 페이지 인덱스가 `0..<pageCount` 밖이다.
+  /// 페이지 인덱스가 `0..<pageCount` 밖입니다.
   case pageOutOfRange(index: Int, pageCount: Int)
 
-  /// 지원하지 않는 스트림 필터 (M4 텍스트 추출부터 발화 — v1 케이스는 지금 전부 선언한다).
+  /// 지원하지 않는 스트림 필터입니다 (M4 텍스트 추출부터 발화 — v1 케이스는 지금 전부 선언합니다).
   case unsupportedFilter(name: String)
 
-  /// 호출 태스크 취소로 중단됨 (M7 검색부터 발화 — v1 케이스는 지금 전부 선언한다).
+  /// 호출 태스크 취소로 중단됩니다 (M7 검색부터 발화 — v1 케이스는 지금 전부 선언합니다).
   case cancelled
 }
 
 extension PapyrusError: LocalizedError {
-  /// 사람이 읽을 수 있는 영문 설명.
+  /// 사람이 읽을 수 있는 영문 설명입니다.
   public var errorDescription: String? {
     switch self {
     case .notAPDF:

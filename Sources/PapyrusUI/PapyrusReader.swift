@@ -2,11 +2,11 @@ import PapyrusCore
 import PapyrusRendering
 import SwiftUI
 
-/// PDF 뷰어 뷰 (SwiftUI 퍼사드 — 내부는 네이티브 스크롤 호스트).
+/// PDF 뷰어 뷰입니다 (SwiftUI 퍼사드 — 내부는 네이티브 스크롤 호스트).
 ///
-/// 적재는 비동기다: 첫 표시 시 페이지 트리를 읽어 레이아웃·렌더 서비스를 조립하고
+/// 적재는 비동기입니다: 첫 표시 시 페이지 트리를 읽어 레이아웃·렌더 서비스를 조립하고
 /// (`TileRenderQueue.init`), 완료 전에는 `ProgressView`, 실패 시 안내 뷰를
-/// 표시한다. `document` 인스턴스가 바뀌면 세션을 재조립한다.
+/// 표시합니다. `document` 인스턴스가 바뀌면 세션을 재조립합니다.
 public struct PapyrusReader: View {
   /// 표시할 문서 (열린 상태).
   private let document: PapyrusDocument
@@ -20,16 +20,16 @@ public struct PapyrusReader: View {
   /// 뷰어 부착 시점의 화면 배율 (가정 6 — SwiftUI 환경값이 플랫폼을 가린다).
   @Environment(\.displayScale) private var displayScale
 
-  /// 뷰어를 만든다.
+  /// 뷰어를 만듭니다.
   /// - Parameters:
-  ///   - document: 표시할 문서 (열린 상태).
-  ///   - model: 관찰·제어 모델. 같은 모델을 목차 사이드바 등과 공유한다.
+  ///   - document: 표시할 문서입니다 (열린 상태).
+  ///   - model: 관찰·제어 모델입니다. 같은 모델을 목차 사이드바 등과 공유합니다.
   public init(document: PapyrusDocument, model: PapyrusReaderModel) {
     self.document = document
     self.model = model
   }
 
-  /// 뷰 본문.
+  /// 뷰 본문입니다.
   public var body: some View {
     Group {
       switch self.model.loadState {
