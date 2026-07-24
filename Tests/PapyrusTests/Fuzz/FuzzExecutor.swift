@@ -1,6 +1,7 @@
 import Foundation
 import Papyrus
 import PapyrusTestSupport
+import Synchronization
 import Testing
 
 /// 케이스 하나에 대해 실행할 표면 묶음.
@@ -75,6 +76,8 @@ enum FuzzExecutor {
   ) async -> [FuzzFinding] {
     var iterator = cases.makeIterator()
     var findings: [FuzzFinding] = []
+    var nextSlot = 0
+    let width = max(1, budget.width)
 
     await withTaskGroup(of: FuzzFinding?.self) { group in
       var inFlight = 0
@@ -83,11 +86,15 @@ enum FuzzExecutor {
         guard let caseID = iterator.next() else {
           return
         }
+        let slot = nextSlot % width
+        nextSlot += 1
         inFlight += 1
         group.addTask {
+          Self.recordSlotStart(slot: slot, caseID: caseID)
           let outcome = await Self.runOne(
             caseID: caseID, surface: surface, perCase: budget.perCase
           )
+          Self.recordSlotEnd(slot: slot)
           guard case .timedOut = outcome else {
             return nil
           }
@@ -95,7 +102,7 @@ enum FuzzExecutor {
         }
       }
 
-      for _ in 0..<max(1, budget.width) {
+      for _ in 0..<width {
         addNext()
       }
       while inFlight > 0, let result = await group.next() {
@@ -202,6 +209,32 @@ extension FuzzExecutor {
       }
     }
     return timedOutCount
+  }
+}
+
+// MARK: - 크래시 진단 슬롯 맵 (설계 §4.4)
+
+extension FuzzExecutor {
+  /// 현재 실행 중인 케이스 ID들 — 슬롯(병렬 워커 인덱스, `0..<width`)별로 최신 값만 보관한다.
+  /// 프로세스가 죽으면 이 맵 자체는 함께 사라지므로, 실질 진단 수단은 `PAPYRUS_FUZZ_VERBOSE=1`
+  /// 일 때 케이스 시작마다 남기는 stdout 출력이다 (크래시 재현 절차: 같은 시드로
+  /// `PAPYRUS_FUZZ_VERBOSE=1` 재실행 → 마지막 출력 ID들이 용의자).
+  private static let slotMap = Mutex<[Int: FuzzCaseID]>([:])
+
+  /// 케이스 시작을 슬롯 맵에 기록하고, verbose 모드면 stdout에도 출력한다.
+  private static func recordSlotStart(slot: Int, caseID: FuzzCaseID) {
+    Self.slotMap.withLock { $0[slot] = caseID }
+    guard ProcessInfo.processInfo.environment["PAPYRUS_FUZZ_VERBOSE"] == "1" else {
+      return
+    }
+    print("[fuzz] slot=\(slot) start \(caseID)")
+  }
+
+  /// 케이스 종료를 슬롯 맵에서 제거한다.
+  private static func recordSlotEnd(slot: Int) {
+    Self.slotMap.withLock { slots in
+      _ = slots.removeValue(forKey: slot)
+    }
   }
 }
 
