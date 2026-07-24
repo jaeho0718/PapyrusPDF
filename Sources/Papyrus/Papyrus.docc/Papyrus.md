@@ -8,11 +8,12 @@ Core Graphics에 위임합니다. `import Papyrus` 하나로 파싱 코어(`Papy
 SwiftUI 뷰어(`PapyrusUI`)의 공개 API 전체를 사용할 수 있습니다.
 
 빠르게 시작하려면 <doc:GettingStarted>를 참고하세요. 각 모듈의 상세 API는
-`PapyrusCore`·`PapyrusUI` 타겟 문서에 있고, 아키텍처 설계 전문은 저장소의
-`Docs/ARCHITECTURE.md`에 있습니다.
+`PapyrusCore`·`PapyrusUI` 타겟 문서에 있고, 내부 구조와 설계 원칙은
+<doc:Architecture>에 정리되어 있습니다.
 
 ## Topics
 
 ### 시작하기
 
 - <doc:GettingStarted>
+- <doc:Architecture>
