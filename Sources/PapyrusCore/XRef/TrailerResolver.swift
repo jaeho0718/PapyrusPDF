@@ -134,6 +134,11 @@ extension TrailerResolver {
   }
 
   /// 1~2자리 십진 자릿수 런을 스캔한다. 자릿수가 0개거나 3개 이상이면 `nil`.
+  ///
+  /// 3번째 숫자 바이트를 만나는 즉시 무효로 확정하고 더 스캔하지 않는다 — 유효 결과는
+  /// 최대 2자리(값 ≤ 99)뿐이므로 `value` 누산은 항상 오버플로 여지가 없다. 뮤테이션 퍼징이
+  /// 찾아낸 결함(M8): 이전 구현은 판정 전에 런 전체를 무조건 누산해 `%PDF-1.49999...`처럼
+  /// 자릿수가 긴 손상 헤더에서 `Int` 곱셈 오버플로 트랩으로 프로세스가 죽었다.
   private static func scanShortDigitRun(
     file: MappedFile, from start: Int
   ) -> (value: Int, next: Int)? {
@@ -141,11 +146,14 @@ extension TrailerResolver {
     var value = 0
     var count = 0
     while let byte = file.byte(at: cursor), (0x30...0x39).contains(byte) {
+      guard count < 2 else {
+        return nil
+      }
       value = value * 10 + Int(byte - 0x30)
-      cursor += 1
       count += 1
+      cursor += 1
     }
-    guard (1...2).contains(count) else {
+    guard count >= 1 else {
       return nil
     }
     return (value, cursor)

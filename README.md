@@ -1,81 +1,89 @@
 # Papyrus
 
-수천 페이지급 대용량 PDF를 효율적으로 다루기 위한 macOS / iPadOS / iOS 멀티플랫폼 Swift 패키지.
+[![CI](https://github.com/jaeho0718/Papyrus/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/jaeho0718/Papyrus/actions/workflows/ci.yml)
 
-PDFKit에 의존하지 않습니다. PDF 파일 구조(xref, 객체, 페이지 트리, 메타데이터, 목차, 페이지별 텍스트)는 순수 Swift로 직접 파싱하고, 픽셀 래스터화만 Core Graphics에 위임하는 하이브리드 구조로 — 대용량 파일의 로딩 방식과 메모리 사용을 완전히 제어합니다.
+----
 
-- **파싱 코어**: 메모리 맵 + 지연 객체 로딩. 파일 전체를 메모리에 올리지 않고 제목·저자·생성일·목차·페이지별 텍스트를 추출
-- **뷰어**: SwiftUI 뷰 하나로 사용하는 가상화 스크롤 뷰어. 페이지 뷰 재활용 + 커스텀 타일 렌더링으로 수천 페이지에서도 일정한 메모리·스크롤 성능
-- **검색**: 추출된 텍스트 기반 문서 내 검색과 뷰어 하이라이트
+Papyrus는 수천 페이지급 대용량 PDF를 macOS·iPadOS·iOS에서 다루기 위한 순수 Swift
+패키지입니다. PDFKit에 의존하지 않고, PDF 파일 구조(xref, 객체, 페이지 트리,
+메타데이터, 목차, 페이지별 텍스트)는 직접 파싱하고 픽셀 래스터화만 Core Graphics에
+위임하는 하이브리드 구조를 취합니다 — 이 분리 덕분에 대용량 파일을 여는 방식과
+메모리 사용량을 패키지가 전적으로 제어합니다.
 
-> 현재 개발 초기 단계입니다. 설계 전문은 [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md)를 참고하세요.
+파싱 코어는 메모리 맵과 지연 객체 로딩으로 파일 전체를 메모리에 올리지 않고,
+뷰어는 페이지 뷰를 재활용하는 가상화 스크롤과 커스텀 타일 렌더링으로 수천
+페이지에서도 일정한 메모리와 스크롤 성능을 유지합니다. 검색은 추출된 텍스트를
+기반으로 결과를 스트리밍하며 뷰어 안에서 바로 하이라이트됩니다. 어떤 입력에도
+크래시나 행 없이 열리도록 손상 문서를 상시 퍼즈 테스트로 검증하며, 복구가
+개입한 경우에는 실패 대신 경고로 알립니다.
 
-## 요구 사항
+v1 표면은 안정 상태입니다. 설치, 사용법, 내부 설계는 아래 절에서 이어집니다.
 
-- iOS 18+ / iPadOS 18+ / macOS 15+
-- Swift 6 (strict concurrency)
+## Papyrus 사용 시작하기
 
-## 사용 방법
-
-> 아래 API는 v1 목표 인터페이스이며 구현 진행에 따라 달라질 수 있습니다.
-
-```swift
-import Papyrus
-
-// 문서 열기 — 메모리 맵 기반, 수천 페이지도 즉시
-let document = try await PapyrusDocument.open(url: pdfURL)
-
-// 메타데이터
-let metadata = try await document.metadata
-print(metadata.title ?? "무제", metadata.author ?? "작자 미상")
-
-// 목차
-let outline = try await document.outline
-
-// 페이지별 텍스트
-let text = try await document.text(forPage: 0)
-
-// 검색 (스트리밍 결과)
-for try await result in document.search("papyrus") {
-  print("p.\(result.pageIndex): \(result.snippet)")
-}
-```
+Swift Package Manager로 설치합니다.
 
 ```swift
-import Papyrus
-import SwiftUI
-
-struct ReaderScreen: View {
-  let document: PapyrusDocument
-  @State private var model = PapyrusReaderModel()
-
-  var body: some View {
-    PapyrusReader(document: document, model: model)
-  }
-}
+dependencies: [
+  .package(url: "https://github.com/jaeho0718/Papyrus.git", branch: "main")
+]
 ```
 
-## 기여 방법
+타겟 의존성에는 `Papyrus`(엄브렐러) 하나만 추가하면 파싱 코어와 뷰어 API가 모두
+노출됩니다.
 
-### 개발 환경 셋업
+```swift
+.target(name: "YourTarget", dependencies: ["Papyrus"])
+```
 
-클론 후 1회 실행하세요:
+iOS 18+ / iPadOS 18+ / macOS 15+, Swift 6(strict concurrency)을 요구합니다.
+
+설치부터 문서 열기, 메타데이터·텍스트·검색, 뷰어 표시까지 이어지는 전체 흐름은
+[GettingStarted]를, 뷰어를 더 깊이 제어하는 방법(적재 상태 관찰, 검색
+하이라이트·매치 탐색, 목차 이동, 위치 저장·복원)은 [ViewerGuide]를, 내부 모듈
+구성과 동시성·손상 내성 설계는 [Architecture]를 참고하세요. v1 지원 범위와 성능
+특성은 [SupportedFeatures]에 정리되어 있습니다. 이 문서들은 DocC 카탈로그로
+작성되어 있으며, 저장소를 체크아웃한 뒤 아래 커맨드로 로컬에서 생성해 읽을 수
+있습니다.
 
 ```bash
-./Scripts/setup.sh
+swift package generate-documentation --target Papyrus
 ```
 
-git 훅이 활성화되어 커밋 시 SwiftLint(strict)가 자동 실행되고, main/develop 직접 push가 차단됩니다. SwiftLint가 없다면 `brew install swiftlint`.
+## Papyrus 개발 참여하기
 
-### 개발 규칙
+저장소를 클론한 뒤 빌드와 테스트, 린트를 실행합니다.
 
-- **gitflow**: 새 작업은 `develop`에서 `feature/{작업명}` 브랜치로 분기합니다. `develop`/`main` 병합은 **반드시 Pull Request**를 경유하며, CI(`lint-build-test`: SwiftLint + build + test) 통과가 필수입니다. 병합은 merge commit(`--merge`) 방식을 사용합니다.
-- **코드 스타일**: [StyleShare swift-style-guide](https://github.com/StyleShare/swift-style-guide)를 따릅니다 (2칸 들여쓰기, 99자 줄 제한 등). `.swiftlint.yml`이 매 커밋 시 강제합니다.
-- **문서화**: 모든 공개 API에 DocC 문서 주석(`///`)이 필수입니다 (SwiftLint `missing_docs` 규칙으로 강제). 매 작업마다 문서화를 완결합니다.
-- **테스트**: 구현과 테스트(Swift Testing)는 같은 PR에서 완결합니다.
+```bash
+swift build
+swift test
+swiftlint lint --strict
+```
 
-### PR 절차
+손상 문서에 대한 심층 퍼즈 실행은 별도 커맨드로 수행합니다: `PAPYRUS_FUZZ=1 swift
+test -c release --filter DeepFuzzTests`. 실제 뷰어 동작과 Instruments
+프로파일링(스크롤·메모리)을 눈으로 확인하려면 `Examples/PapyrusDemo` 데모 앱을
+여세요.
 
-1. `feature/...` 브랜치에서 작업 후 push
-2. `develop` 대상 PR 생성 — 템플릿 체크리스트를 채워주세요
-3. CI 통과 확인 후 병합
+gitflow 브랜치 전략, 코드 스타일, 문서화·테스트 규칙, PR 절차를 포함한 개발 설계
+전문은 [Docs/ARCHITECTURE.md]를 참고하세요.
+
+## 지원
+
+버그를 발견했거나 기능을 제안하고 싶다면 [이슈 트래커][Issues]에 등록해
+주세요. 재현 가능한 최소 예제(가능하면 원인이 된 PDF 파일이나 생성 방법)를 함께
+남겨 주시면 원인 파악이 빨라집니다.
+
+동작이나 설계에 대한 질문도 이슈로 남겨 주시면 됩니다.
+
+## 라이선스
+
+Papyrus는 [MIT 라이선스][LICENSE]를 따릅니다.
+
+[GettingStarted]: Sources/Papyrus/Papyrus.docc/GettingStarted.md
+[ViewerGuide]: Sources/Papyrus/Papyrus.docc/ViewerGuide.md
+[Architecture]: Sources/Papyrus/Papyrus.docc/Architecture.md
+[SupportedFeatures]: Sources/Papyrus/Papyrus.docc/SupportedFeatures.md
+[Docs/ARCHITECTURE.md]: Docs/ARCHITECTURE.md
+[Issues]: https://github.com/jaeho0718/Papyrus/issues
+[LICENSE]: LICENSE

@@ -12,6 +12,9 @@ let package = Package(
     // 제품은 umbrella 하나만 노출한다. (ARCHITECTURE.md 확정)
     .library(name: "Papyrus", targets: ["Papyrus"])
   ],
+  dependencies: [
+    .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.0")
+  ],
   targets: [
     // ── 라이브러리 타겟 (의존 방향: UI → Rendering → Core) ──
     .target(name: "PapyrusCore"),

@@ -257,6 +257,27 @@ struct TrailerResolverTests {
     })
   }
 
+  /// TR9b: 부 버전 자릿수가 병적으로 긴 헤더(`%PDF-1.4999...`, 20+ 자리)도 `Int` 오버플로
+  /// 트랩 없이 1.4 폴백 + 경고로 흡수한다 — M8 심층 퍼즈가 찾아낸 크래시의 회귀 테스트
+  /// (`FuzzRegressionTests.knownFindings`의 `classicMinimal mut=0x6F0493424FF0288D n=10`와
+  /// 동일 결함 부류).
+  @Test func pathologicallyLongVersionDigitRunFallsBackWithoutOverflow() throws {
+    let fixture = PDFFixtureBuilder(pageCount: 1).build()
+    var bytes = [UInt8](fixture.data)
+    let original = Array("%PDF-1.4".utf8)
+    let replacement = Array("%PDF-1.\(String(repeating: "9", count: 25))".utf8)
+    #expect(Array(bytes[0..<original.count]) == original)
+    bytes.replaceSubrange(0..<original.count, with: replacement)
+
+    let file = MappedFile(data: Data(bytes))
+    let resolution = try TrailerResolver(file: file).resolve()
+    #expect(resolution.version == PDFVersion(major: 1, minor: 4))
+    #expect(resolution.warnings.contains {
+      if case .malformedVersion = $0 { return true }
+      return false
+    })
+  }
+
   // MARK: TR10 — 중간 섹션 훼손
 
   /// TR10: 업데이트 2회 중 가운데 xref 훼손 → `.xrefSectionUnreadable` + 성공(부분 수용
