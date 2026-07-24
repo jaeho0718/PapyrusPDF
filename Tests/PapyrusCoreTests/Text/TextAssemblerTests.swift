@@ -46,7 +46,7 @@ struct TextAssemblerTests {
     #expect(content.string == "Top\nBottom")
   }
 
-  // MARK: TA4 — 방출 순서 역전 → 좌→우 재정렬
+  // MARK: TA4 — 방출 순서 역전 → 좌→우 재정렬, 출력 runs는 읽기 순서(오름차순)
 
   @Test func reversedEmissionOrderReordersLeftToRight() {
     let rightRun = Self.makeRun(text: "Right", origin: CGPoint(x: 100, y: 700))
@@ -54,9 +54,25 @@ struct TextAssemblerTests {
     let content = TextAssembler.assemble([rightRun, leftRun], pageIndex: 0)
     #expect(content.string.hasPrefix("Left"))
     #expect(content.string.hasSuffix("Right"))
-    // 출력 runs 배열은 입력(방출) 순서와 1:1 대응 — rightRun이 먼저(index 0).
+    // 출력 runs 배열은 읽기 순서(range.lowerBound 오름차순) 계약을 따른다 — 방출 순서와
+    // 무관하게 leftRun이 먼저(index 0) 온다 (설계 M9 §0.1).
     #expect(content.runs.count == 2)
-    #expect(content.runs[0].range.lowerBound > content.runs[1].range.lowerBound)
+    #expect(content.runs[0].range.lowerBound < content.runs[1].range.lowerBound)
+  }
+
+  // MARK: TA9 — 출력 runs는 항상 오름차순(방출 역전·다중 라인 혼합에서도)
+
+  @Test func runsAreSortedByRangeAscending() {
+    let bottomRight = Self.makeRun(text: "BR", origin: CGPoint(x: 100, y: 650))
+    let bottomLeft = Self.makeRun(text: "BL", origin: CGPoint(x: 0, y: 650))
+    let topRight = Self.makeRun(text: "TR", origin: CGPoint(x: 100, y: 700))
+    let topLeft = Self.makeRun(text: "TL", origin: CGPoint(x: 0, y: 700))
+    let content = TextAssembler.assemble(
+      [bottomRight, topLeft, bottomLeft, topRight], pageIndex: 0
+    )
+    for index in 1..<content.runs.count {
+      #expect(content.runs[index - 1].range.lowerBound < content.runs[index].range.lowerBound)
+    }
   }
 
   // MARK: TA5 — range·advances 정합, 삽입 문자 미소속

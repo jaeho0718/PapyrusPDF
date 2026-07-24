@@ -2,6 +2,10 @@ import CoreGraphics
 import Foundation
 
 /// 원시 run → 읽기 순서 문자열 + 공개 run 조립 (순수 동기 함수, §3.7).
+///
+/// 출력 계약: `PageTextContent.runs`는 항상 `range.lowerBound` 오름차순(읽기 순서)이다 —
+/// 문자열을 라인 순서대로 이어붙이며 run을 그 자리에서 결과 배열에 append하므로 구조적으로
+/// 보장된다(M9 §0.1).
 package enum TextAssembler {
   /// 원시 run 목록을 읽기 순서로 조립한다.
   ///
@@ -10,7 +14,7 @@ package enum TextAssembler {
   /// - Parameters:
   ///   - runs: 인터프리터가 방출한 원시 run (방출 순서).
   ///   - pageIndex: 결과에 각인할 페이지 인덱스.
-  /// - Returns: 조립된 페이지 텍스트 스냅숏.
+  /// - Returns: 조립된 페이지 텍스트 스냅숏 (`runs`는 읽기 순서 = `range.lowerBound` 오름차순).
   package static func assemble(_ runs: [RawGlyphRun], pageIndex: Int) -> PageTextContent {
     guard !runs.isEmpty else {
       return PageTextContent(pageIndex: pageIndex, string: "", runs: [])
@@ -20,7 +24,8 @@ package enum TextAssembler {
     let orderedLines = Self.orderedLines(from: entries)
 
     var string = ""
-    var resultsByIndex = [Int: TextRun](minimumCapacity: runs.count)
+    var orderedRuns: [TextRun] = []
+    orderedRuns.reserveCapacity(runs.count)
     var isFirstLine = true
 
     for line in orderedLines {
@@ -28,10 +33,9 @@ package enum TextAssembler {
         string.append("\n")
       }
       isFirstLine = false
-      Self.appendLine(line, into: &string, resultsByIndex: &resultsByIndex)
+      Self.appendLine(line, into: &string, orderedRuns: &orderedRuns)
     }
 
-    let orderedRuns = (0..<runs.count).compactMap { resultsByIndex[$0] }
     return PageTextContent(pageIndex: pageIndex, string: string, runs: orderedRuns)
   }
 }
@@ -164,9 +168,10 @@ extension TextAssembler {
 
 extension TextAssembler {
   /// 라인 하나(이미 좌→우 정렬됨)를 문자열에 이어붙이고, 확정된 range로 `TextRun`을
-  /// 만들어 `resultsByIndex`에 기록한다.
+  /// 만들어 `orderedRuns`에 순서대로 append한다 (문자열 조립 순서 = 읽기 순서이므로
+  /// append만으로 출력 배열이 오름차순이 된다).
   private static func appendLine(
-    _ line: [RunEntry], into string: inout String, resultsByIndex: inout [Int: TextRun]
+    _ line: [RunEntry], into string: inout String, orderedRuns: inout [TextRun]
   ) {
     var previousEnd: PreviousRunEnd?
     for entry in line {
@@ -176,9 +181,11 @@ extension TextAssembler {
       let startIndex = string.utf16.count
       string += String(decoding: entry.run.utf16, as: UTF16.self)
       let endIndex = string.utf16.count
-      resultsByIndex[entry.originalIndex] = TextRun(
-        range: startIndex..<endIndex, quad: entry.run.quad, advances: entry.run.advances,
-        isInvisible: entry.run.isInvisible
+      orderedRuns.append(
+        TextRun(
+          range: startIndex..<endIndex, quad: entry.run.quad, advances: entry.run.advances,
+          isInvisible: entry.run.isInvisible
+        )
       )
       let totalAdvance = entry.run.advances.reduce(0, +)
       let direction = entry.run.baselineDirection

@@ -177,6 +177,33 @@ public struct Quad: Sendable, Equatable {
   }
 }
 
+/// 직렬화를 지원합니다. 형식: `{"bottomLeft": [x, y], "bottomRight": …}` — 꼭짓점별
+/// 키에 좌표 2원소 배열입니다.
+extension Quad: Codable {}
+
+extension Quad {
+  /// 축 정렬 사각형을 quad로 변환합니다 (PDF 페이지 공간 y-위 기준 —
+  /// `bottomLeft = (minX, minY)`). 영역 등록·OCR 박스 공급 편의입니다.
+  ///
+  /// 음수 크기 rect는 표준화되며, 비유한 좌표가 섞인 rect는 영점 quad가 됩니다.
+  /// - Parameter rect: 변환할 축 정렬 사각형입니다 (PDF 페이지 공간).
+  public init(rect: CGRect) {
+    let standardized = rect.standardized
+    guard standardized.minX.isFinite, standardized.minY.isFinite, standardized.maxX.isFinite,
+      standardized.maxY.isFinite
+    else {
+      self.init(bottomLeft: .zero, bottomRight: .zero, topRight: .zero, topLeft: .zero)
+      return
+    }
+    self.init(
+      bottomLeft: CGPoint(x: standardized.minX, y: standardized.minY),
+      bottomRight: CGPoint(x: standardized.maxX, y: standardized.minY),
+      topRight: CGPoint(x: standardized.maxX, y: standardized.maxY),
+      topLeft: CGPoint(x: standardized.minX, y: standardized.maxY)
+    )
+  }
+}
+
 /// 같은 텍스트 상태로 그려진 연속 글리프 묶음 하나의 스냅숏입니다.
 public struct TextRun: Sendable, Equatable {
   /// ``PageTextContent/string`` 안에서 이 run이 차지하는 UTF-16 코드유닛 구간입니다.
@@ -203,6 +230,24 @@ public struct TextRun: Sendable, Equatable {
   }
 }
 
+extension TextRun {
+  /// 문자별 전진량 정보가 없는 소스(OCR 등)를 위한 균등 advance run을 만듭니다.
+  ///
+  /// quad 보간이 전진량 **비율**만 사용하므로 절대 폭 없이도 부분 하이라이트·히트테스트가
+  /// 동작합니다 (문자 폭이 실제와 다르면 글자 경계 정밀도만 낮아집니다).
+  /// - Parameters:
+  ///   - range: ``PageTextContent/string`` 안에서 이 run이 차지하는 UTF-16 코드유닛 구간입니다.
+  ///   - quad: 페이지 공간 사변형입니다.
+  ///   - isInvisible: Tr 3 여부입니다 (기본 `false`).
+  /// - Returns: 균등 전진량을 갖는 run입니다.
+  public static func uniform(range: Range<Int>, quad: Quad, isInvisible: Bool = false) -> TextRun {
+    TextRun(
+      range: range, quad: quad, advances: Array(repeating: 1, count: range.count),
+      isInvisible: isInvisible
+    )
+  }
+}
+
 /// 페이지 하나의 텍스트 추출 결과 스냅숏입니다.
 public struct PageTextContent: Sendable, Equatable {
   /// 페이지 인덱스입니다 (0 기반).
@@ -210,6 +255,9 @@ public struct PageTextContent: Sendable, Equatable {
   /// 조립된 페이지 문자열입니다 (읽기 순서 휴리스틱 적용, 공백/줄바꿈 삽입 완료).
   public let string: String
   /// run 목록입니다. 삽입된 공백·줄바꿈은 어느 run에도 속하지 않습니다.
+  ///
+  /// run은 `range.lowerBound` 오름차순입니다 (Papyrus가 생성한 값의 계약이며, 직접
+  /// 생성할 때도 이 순서를 권장합니다 — 어긋난 값은 소비 시점에 정렬됩니다).
   public let runs: [TextRun]
 
   /// 페이지 텍스트 스냅숏을 생성합니다.
