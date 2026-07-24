@@ -1,9 +1,9 @@
 import Foundation
 
-/// 열린 PDF 문서입니다. `PDFDocumentCore` 액터를 감싼 Sendable 퍼사드입니다.
+/// 열린 PDF 문서입니다. 내부 문서 코어 액터를 감싼 Sendable 퍼사드입니다.
 ///
-/// 모든 getter는 async이며 반환값은 전부 Sendable 스냅숏 값 타입입니다 (ARCHITECTURE.md
-/// 동시성 모델). 무거운 계산(페이지 트리 평탄화 등)은 첫 접근 시 1회 수행 후 캐시됩니다.
+/// 모든 getter는 async이며 반환값은 전부 Sendable 스냅숏 값 타입입니다.
+/// 무거운 계산(페이지 트리 평탄화 등)은 첫 접근 시 1회 수행 후 캐시됩니다.
 public final class PapyrusDocument: Sendable {
   /// 내부 코어 액터 (M4~M7 확장이 같은 코어를 소비한다).
   package let core: PDFDocumentCore
