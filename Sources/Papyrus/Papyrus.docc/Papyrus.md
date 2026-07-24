@@ -25,3 +25,7 @@ swift package generate-documentation --enable-experimental-combined-documentatio
 - <doc:GettingStarted>
 - <doc:ViewerGuide>
 - <doc:Architecture>
+
+### 참고
+
+- <doc:SupportedFeatures>
