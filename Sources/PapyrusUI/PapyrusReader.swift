@@ -4,9 +4,10 @@ import SwiftUI
 
 /// PDF 뷰어 뷰입니다 (SwiftUI 퍼사드 — 내부는 네이티브 스크롤 호스트).
 ///
-/// 적재는 비동기입니다: 첫 표시 시 페이지 트리를 읽어 레이아웃·렌더 서비스를 조립하고
-/// (`TileRenderQueue.init`), 완료 전에는 `ProgressView`, 실패 시 안내 뷰를
-/// 표시합니다. `document` 인스턴스가 바뀌면 세션을 재조립합니다.
+/// 적재는 비동기입니다: 첫 표시 시 페이지 트리를 읽어 레이아웃·렌더링 파이프라인을
+/// 조립하고, 완료 전에는 `ProgressView`, 실패 시 안내 뷰를 표시합니다. 진행 상황은
+/// `model.loadState`(``ReaderLoadState``)로도 관찰할 수 있습니다. `document` 인스턴스가
+/// 바뀌면 세션을 재조립합니다.
 public struct PapyrusReader: View {
   /// 표시할 문서 (열린 상태).
   private let document: PapyrusDocument

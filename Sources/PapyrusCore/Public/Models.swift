@@ -96,7 +96,7 @@ public struct PageInfo: Sendable, Equatable {
   /// 페이지 회전입니다.
   public let rotation: PageRotation
 
-  /// 회전을 반영한 표시 크기 (cropBox 기준) — M6 레이아웃 엔진의 입력입니다.
+  /// 회전을 반영한 표시 크기입니다 (cropBox 기준) — 뷰어 레이아웃 계산의 입력값입니다.
   public var displaySize: CGSize {
     PageGeometry.displaySize(
       cropBoxSize: self.cropBox.size, normalizedRotationDegrees: self.rotation.rawValue
@@ -184,7 +184,7 @@ public struct TextRun: Sendable, Equatable {
   /// 페이지 공간 사변형입니다 (ascent/descent 박스).
   public let quad: Quad
   /// UTF-16 코드유닛당 베이스라인 방향 전진량입니다 (페이지 공간 단위).
-  /// `count == range.count`. 다중 유닛 글리프는 첫 유닛에 전액 귀속됩니다 (M4 설계 가정 3).
+  /// `count == range.count`. 다중 유닛 글리프는 첫 유닛에 전액 귀속됩니다.
   public let advances: [CGFloat]
   /// Tr 3(투명 텍스트, OCR 레이어) 여부입니다. 문자열에는 포함되고 표시만 안 된 텍스트입니다.
   public let isInvisible: Bool

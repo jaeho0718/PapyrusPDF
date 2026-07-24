@@ -45,6 +45,9 @@ public final class PapyrusDocument: Sendable {
   }
 
   /// 페이지 수입니다 (실측 — /Count 주장값이 아닙니다). 첫 접근 시 페이지 트리를 평탄화합니다.
+  /// - Throws: 페이지 트리 루트(/Root, /Pages)를 해소할 수 없을 정도로 문서가 손상됐다면
+  ///   ``PapyrusError/damagedDocument``, 호출이 취소됐다면 ``PapyrusError/cancelled``입니다.
+  ///   개별 페이지 노드의 이상은 관용 처리되어 이 프로퍼티를 실패시키지 않습니다.
   public var pageCount: Int {
     get async throws(PapyrusError) {
       try await Self.mapErrors { try await self.core.pageTree().pageCount }
@@ -52,6 +55,10 @@ public final class PapyrusDocument: Sendable {
   }
 
   /// 문서 메타데이터입니다 (첫 접근 시 계산 후 캐시).
+  ///
+  /// /Info·XMP 수집·병합 과정의 결함은 전부 관용 처리되어(해당 필드만 `nil`) 실질적으로
+  /// 실패하지 않습니다.
+  /// - Throws: 호출이 취소됐다면 ``PapyrusError/cancelled``입니다.
   public var metadata: DocumentMetadata {
     get async throws(PapyrusError) {
       try await Self.mapErrors { try await self.core.documentMetadata() }
@@ -59,6 +66,10 @@ public final class PapyrusDocument: Sendable {
   }
 
   /// 목차입니다 (부재 시 빈 배열, 첫 접근 시 계산 후 캐시).
+  ///
+  /// 목차 항목 자체의 순환·손상은 관용 처리(절단)되므로 이 프로퍼티를 실패시키지 않습니다.
+  /// - Throws: 내부적으로 페이지 트리를 먼저 확보하므로 ``pageCount``와 동일한 조건 —
+  ///   ``PapyrusError/damagedDocument`` 또는 ``PapyrusError/cancelled``입니다.
   public var outline: [OutlineItem] {
     get async throws(PapyrusError) {
       try await Self.mapErrors { try await self.core.outlineItems() }

@@ -2,7 +2,7 @@ import CoreGraphics
 import Observation
 import PapyrusCore
 
-/// 읽던 위치 스냅숏입니다 (저장·복원용, Codable — ARCHITECTURE 127행).
+/// 읽던 위치 스냅숏입니다 (저장·복원용, `Codable`).
 public struct ReaderPosition: Sendable, Codable, Equatable {
   /// 뷰포트 상단이 걸친 페이지 인덱스입니다 (0 기반).
   public let pageIndex: Int
@@ -42,7 +42,7 @@ enum PendingReaderCommand {
   case restore(ReaderPosition)
 }
 
-/// 검색 요약 상태입니다 (모델 관찰용 — ARCHITECTURE 132행 searchState).
+/// 검색 요약 상태입니다 (``PapyrusReaderModel/searchState``로 관찰합니다).
 public struct ReaderSearchState: Sendable, Equatable {
   /// 진행 단계입니다.
   public enum Phase: Sendable, Equatable {
@@ -71,7 +71,7 @@ public struct ReaderSearchState: Sendable, Equatable {
   )
 }
 
-/// 뷰어 관찰·제어 모델입니다 (ARCHITECTURE 129행).
+/// 뷰어 관찰·제어 모델입니다.
 ///
 /// 생성 → `PapyrusReader(document:model:)`에 전달 → 뷰가 내부에서 코어와 연결합니다.
 /// 연결 전 호출된 탐색 명령은 보류했다가 연결 직후 1회 재생합니다 (§4.1 —
@@ -107,6 +107,10 @@ public final class PapyrusReaderModel {
   public init() {}
 
   /// 페이지 상단으로 이동합니다 (범위 밖은 클램프).
+  ///
+  /// 페이지 번호 입력창이나 커스텀 목차 UI에서 사용자가 특정 페이지를 선택했을 때
+  /// 호출합니다. `PapyrusReader`가 아직 적재를 마치지 않은 상태에서 호출해도 안전합니다 —
+  /// 요청이 보류됐다가 적재 완료 직후 자동으로 재생됩니다.
   /// - Parameters:
   ///   - index: 이동할 페이지 인덱스입니다.
   ///   - animated: 애니메이션 여부입니다.
@@ -119,6 +123,9 @@ public final class PapyrusReaderModel {
   }
 
   /// 목차 목적지로 이동합니다 (`OutlineDestination.pageIndex` — v1 목적지는 페이지 단위).
+  ///
+  /// `document.outline`에서 얻은 항목을 사용자가 목차 사이드바에서 선택했을 때 그
+  /// `destination`을 그대로 넘기면 됩니다.
   /// - Parameters:
   ///   - destination: 이동할 목차 목적지입니다.
   ///   - animated: 애니메이션 여부입니다.
@@ -127,12 +134,20 @@ public final class PapyrusReaderModel {
   }
 
   /// 현재 위치 스냅숏입니다 (적재 전 nil).
+  ///
+  /// 화면이 사라지거나 앱이 백그라운드로 전환되는 시점에 호출해 `Codable`인 반환값을
+  /// 영구 저장소(예: `UserDefaults`)에 저장해 두면, 다음에 같은 문서를 열 때
+  /// ``restore(_:)``로 이어 볼 수 있습니다.
   /// - Returns: 현재 위치 스냅숏, 미연결이면 `nil`입니다.
   public func capturePosition() -> ReaderPosition? {
     self.core?.capturePosition()
   }
 
   /// 위치를 복원합니다 (적재 전 호출 시 보류 후 적재 직후 적용).
+  ///
+  /// 이전에 ``capturePosition()``으로 저장해 둔 위치를 다시 불러올 때 사용합니다.
+  /// 모델을 만든 직후, `PapyrusReader`가 화면에 붙어 적재를 마치기 전에 호출해도
+  /// 안전합니다 — 적재 완료 시점에 자동으로 적용됩니다.
   /// - Parameter position: 복원할 위치 스냅숏입니다.
   public func restore(_ position: ReaderPosition) {
     guard let core else {

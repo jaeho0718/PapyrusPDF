@@ -17,10 +17,12 @@ public enum PapyrusError: Error, Sendable, Equatable {
   /// 페이지 인덱스가 `0..<pageCount` 밖입니다.
   case pageOutOfRange(index: Int, pageCount: Int)
 
-  /// 지원하지 않는 스트림 필터입니다 (M4 텍스트 추출부터 발화 — v1 케이스는 지금 전부 선언합니다).
+  /// 지원하지 않는 스트림 필터입니다. 페이지 텍스트 추출(``PapyrusDocument/text(forPage:)``) 중
+  /// 콘텐츠 스트림이 미지원 필터를 쓸 때 발생합니다.
   case unsupportedFilter(name: String)
 
-  /// 호출 태스크 취소로 중단됩니다 (M7 검색부터 발화 — v1 케이스는 지금 전부 선언합니다).
+  /// 호출 태스크가 취소되어 작업이 중단되었습니다. ``PapyrusDocument/search(_:options:)``처럼
+  /// `Task` 취소로 조기 종료될 수 있는 작업에서 발생합니다.
   case cancelled
 }
 
