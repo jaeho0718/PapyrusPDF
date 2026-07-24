@@ -12,7 +12,9 @@
 		46101F9B1F68B75851EFC49B /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9434A6D8CDF8787E0CB92F /* ContentView.swift */; };
 		4CF2F4216A9809BF0B239528 /* DocumentLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0625444AF994D86F49FE7287 /* DocumentLoader.swift */; };
 		4F48C9F6BFD8BDFC5B206F6B /* OutlineSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F278E92B770AC17F1F1BA584 /* OutlineSidebar.swift */; };
+		636B924FC7BFA721BB36BBEF /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90B69F7FB86B59D61CC469E3 /* SearchBar.swift */; };
 		6F59EC1EEE2B96581FD2C545 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */; };
+		72CE67BDD4494AC9E182CDBC /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90B69F7FB86B59D61CC469E3 /* SearchBar.swift */; };
 		89C5BFDD20BE4F18C4BCCF04 /* DocumentLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0625444AF994D86F49FE7287 /* DocumentLoader.swift */; };
 		BC29B5AB711D4578E178D14A /* Papyrus in Frameworks */ = {isa = PBXBuildFile; productRef = 222EDA4145742D3DB7CF5941 /* Papyrus */; };
 		BD218099901B3DBEAFB04B39 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9434A6D8CDF8787E0CB92F /* ContentView.swift */; };
@@ -29,6 +31,7 @@
 		2D9434A6D8CDF8787E0CB92F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		40D7C2451AC2EF9163AE3C36 /* SyntheticPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticPDF.swift; sourceTree = "<group>"; };
 		56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderToolbar.swift; sourceTree = "<group>"; };
+		90B69F7FB86B59D61CC469E3 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		A8CF57E4E6CC2A3F0940F948 /* PapyrusDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PapyrusDemoApp.swift; sourceTree = "<group>"; };
 		B5EEBDD386F870F54DE0C6F2 /* Papyrus */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Papyrus; path = ../..; sourceTree = SOURCE_ROOT; };
 		E2B5536CC2251BC5A90321FC /* PapyrusDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PapyrusDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -81,6 +84,7 @@
 				F278E92B770AC17F1F1BA584 /* OutlineSidebar.swift */,
 				A8CF57E4E6CC2A3F0940F948 /* PapyrusDemoApp.swift */,
 				56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */,
+				90B69F7FB86B59D61CC469E3 /* SearchBar.swift */,
 				40D7C2451AC2EF9163AE3C36 /* SyntheticPDF.swift */,
 			);
 			path = PapyrusDemo;
@@ -185,6 +189,7 @@
 				E619F77301461A5692DB50CC /* OutlineSidebar.swift in Sources */,
 				BF215D1638E9CAB1B63D4AC6 /* PapyrusDemoApp.swift in Sources */,
 				EAFB54DFEBB8710B4C0966C7 /* ReaderToolbar.swift in Sources */,
+				636B924FC7BFA721BB36BBEF /* SearchBar.swift in Sources */,
 				E2CFD4F63F073107EB7B4EAA /* SyntheticPDF.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -198,6 +203,7 @@
 				4F48C9F6BFD8BDFC5B206F6B /* OutlineSidebar.swift in Sources */,
 				26267EBC23636BA613EC65AE /* PapyrusDemoApp.swift in Sources */,
 				6F59EC1EEE2B96581FD2C545 /* ReaderToolbar.swift in Sources */,
+				72CE67BDD4494AC9E182CDBC /* SearchBar.swift in Sources */,
 				3E22936217F6A2563A83AEE2 /* SyntheticPDF.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

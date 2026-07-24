@@ -88,7 +88,11 @@ final class ReaderSession {
           documentData: document.core.sourceBytes, pageSizes: pageSizes,
           configuration: RenderConfiguration(pixelScale: pixelScale)
         )
-        let core = ReaderCore(layout: layout, renderQueue: renderQueue)
+        let coordinator = ReaderSearchCoordinator(document: document)
+        let core = ReaderCore(
+          layout: layout, renderQueue: renderQueue, pixelScale: pixelScale,
+          searchCoordinator: coordinator
+        )
         guard let self, !Task.isCancelled else {
           return
         }

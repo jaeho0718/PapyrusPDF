@@ -100,6 +100,25 @@ struct PerformanceGateTests {
     let budget = Self.scaledBudget(milliseconds: 250)
     #expect(median < budget, "중앙값 \(median)이 예산 \(budget)(배율 \(Self.perfScale))을 초과함")
   }
+
+  // MARK: PG5 — M7 검색 스트림 완주 (선택)
+
+  /// PG5: 100페이지 문서 전체 검색(매치 없음 — 전 페이지 순회 강제) 완주 중앙값 <
+  /// 200ms(× 배율). 회귀 감지용 관대한 상한.
+  @Test func fullDocumentSearchCompletesUnder200Milliseconds() async throws {
+    let searchScanData = PDFFixtureBuilder(pageCount: 100).build().data
+    var samples: [Duration] = []
+    for _ in 0..<3 {
+      let document = try await PapyrusDocument.open(data: searchScanData)
+      let clock = ContinuousClock()
+      let start = clock.now
+      for try await _ in document.search("needle") {}
+      samples.append(clock.now - start)
+    }
+    let median = Self.median(samples)
+    let budget = Self.scaledBudget(milliseconds: 200)
+    #expect(median < budget, "중앙값 \(median)이 예산 \(budget)(배율 \(Self.perfScale))을 초과함")
+  }
 }
 
 // MARK: - 측정 헬퍼
