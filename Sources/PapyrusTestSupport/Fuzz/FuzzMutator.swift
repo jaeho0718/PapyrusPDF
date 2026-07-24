@@ -80,7 +80,7 @@ package enum FuzzMutator {
     case .setInterestingByte:
       Self.setInterestingByte(&bytes, rng: &rng)
     case .corruptNumber:
-      Self.corruptNumber(&bytes, rng: &rng)
+      Self.corruptNumber(&bytes, cap: cap, rng: &rng)
     case .truncate:
       Self.truncate(&bytes, rng: &rng)
     case .deleteRange:
@@ -177,16 +177,22 @@ extension FuzzMutator {
 // MARK: - corruptNumber (숫자 런 탐색 + 변형)
 
 extension FuzzMutator {
-  private static func corruptNumber(_ bytes: inout [UInt8], rng: inout SplitMix64) {
+  private static func corruptNumber(_ bytes: inout [UInt8], cap: Int, rng: inout SplitMix64) {
     let start = Int.random(in: 0..<bytes.count, using: &rng)
     guard let run = Self.nearestDigitRun(in: bytes, from: start) else {
       return // 숫자가 전혀 없는 입력 — no-op.
     }
     switch Int.random(in: 0...2, using: &rng) {
     case 0: // 자릿수 추가
+      guard bytes.count + 1 <= cap else {
+        return // 상한 초과 — no-op (§3.2 출력 상한).
+      }
       let digit = UInt8(ascii: "0") &+ UInt8(Int.random(in: 0...9, using: &rng))
       bytes.insert(digit, at: run.upperBound)
     case 1: // 부호 삽입
+      guard bytes.count + 1 <= cap else {
+        return // 상한 초과 — no-op (§3.2 출력 상한).
+      }
       bytes.insert(UInt8(ascii: "-"), at: run.lowerBound)
     default: // 앞자리 치환
       let digit = UInt8(ascii: "0") &+ UInt8(Int.random(in: 0...9, using: &rng))
