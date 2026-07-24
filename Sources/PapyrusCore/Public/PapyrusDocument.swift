@@ -1,6 +1,6 @@
 import Foundation
 
-/// 열린 PDF 문서. ``PDFDocumentCore`` 액터를 감싼 Sendable 퍼사드다.
+/// 열린 PDF 문서. `PDFDocumentCore` 액터를 감싼 Sendable 퍼사드다.
 ///
 /// 모든 getter는 async이며 반환값은 전부 Sendable 스냅숏 값 타입이다 (ARCHITECTURE.md
 /// 동시성 모델). 무거운 계산(페이지 트리 평탄화 등)은 첫 접근 시 1회 수행 후 캐시된다.

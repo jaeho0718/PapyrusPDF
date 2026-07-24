@@ -35,6 +35,12 @@ jobs:
       - name: Test
         run: swift test
 
+      - name: DocC (warnings as errors)
+        run: |
+          for T in PapyrusCore PapyrusUI Papyrus; do
+            swift package generate-documentation --target "$T" --warnings-as-errors
+          done
+
   # 비차단 성능 게이트 (r1, §5.8) — 브랜치 보호 required status check가 아니다.
   # 공유 macOS 러너는 벽시계 임계값이 플레이키하므로 PR을 막지 않고, develop/main
   # push(병합 후) 회귀 트립와이어로만 둔다. 병합 전 확인은 workflow_dispatch로 수동 실행.
