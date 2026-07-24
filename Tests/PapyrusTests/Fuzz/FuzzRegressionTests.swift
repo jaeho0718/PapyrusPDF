@@ -14,7 +14,18 @@ import Testing
 struct FuzzRegressionTests {
   /// 퍼즈가 찾아낸 역대 결함의 재현 케이스. 비어 있으면(v1 최초 상태) 이 스위트는 자명하게
   /// 통과한다.
-  static let knownFindings: [FuzzCaseID] = []
+  static let knownFindings: [FuzzCaseID] = [
+    // 발견 경위: 2026-07-24, 심층 퍼즈 실증(PAPYRUS_FUZZ_SEED=0xC0FFEE2026, openOnly 파생
+    // 시퀀스의 292번째 케이스)에서 프로세스 SIGTRAP(오버플로 트랩)으로 크래시. 뮤테이션이
+    // `classicMinimal` 헤더의 부 버전 자릿수를 `corruptNumber`로 20여 회 이어붙여
+    // `%PDF-1.49999999999999999999...`를 만들었고, `TrailerResolver.scanShortDigitRun`이
+    // 자릿수 개수 판정(1~2자리만 유효) 전에 런 전체를 무조건 `Int` 곱셈 누산해 오버플로
+    // 트랩으로 죽었다. 수정: 3번째 숫자 바이트를 만나는 즉시 무효로 확정하고 스캔을
+    // 중단한다(값은 항상 ≤99). 같은 부류가 `XRefTableParser.scanDigitRun`(classic xref
+    // 행의 offset/generation 필드)에도 있어 `multipliedReportingOverflow` 가드로 동시에
+    // 고쳤다 — 이 케이스가 실제로 타격한 것은 헤더 파서뿐이지만 부류 전체를 문서화한다.
+    FuzzCaseID(seed: .classicMinimal, mutationSeed: 0x6F04_9342_4FF0_288D, mutationCount: 10)
+  ]
 
   /// 등재된 전 결함이 `.full` 표면에서 재발하지 않는지 확인한다.
   @Test func knownFindingsStayFixed() async {

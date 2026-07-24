@@ -142,4 +142,34 @@ struct XRefTableParserTests {
       #expect(error.code == .malformedEntry)
     }
   }
+
+  /// XT6b: 오프셋 자릿수가 병적으로 긴 행(30자리)도 `Int` 오버플로 트랩 없이
+  /// `malformedEntry`로 흡수한다 — `scanDigitRun`의 `multipliedReportingOverflow` 가드
+  /// 회귀 테스트(M8 심층 퍼즈가 헤더 버전 파서에서 찾은 것과 같은 결함 부류).
+  @Test func pathologicallyLongOffsetDigitRunThrowsMalformedEntryWithoutOverflow() {
+    let digits = String(repeating: "9", count: 30)
+    let source = "xref\n0 1\n\(digits) 65535 n\r\ntrailer\n<< /Size 1 /Root 1 0 R >>"
+    let file = MappedFile(data: Data(source.utf8))
+    do {
+      _ = try XRefTableParser(file: file).parseSection(at: 0)
+      Issue.record("30자리 오프셋은 malformedEntry여야 함")
+    } catch {
+      #expect(error.code == .malformedEntry)
+    }
+  }
+
+  /// XT6c: generation 자릿수가 병적으로 긴 행(30자리)도 오버플로 없이 `malformedEntry`로
+  /// 흡수한다 — generation 필드는 offset과 달리 폭 상한 검사가 없어 오버플로 가드 자체가
+  /// 유일한 방어선이다.
+  @Test func pathologicallyLongGenerationDigitRunThrowsMalformedEntryWithoutOverflow() {
+    let digits = String(repeating: "9", count: 30)
+    let source = "xref\n0 1\n0000000000 \(digits) n\r\ntrailer\n<< /Size 1 /Root 1 0 R >>"
+    let file = MappedFile(data: Data(source.utf8))
+    do {
+      _ = try XRefTableParser(file: file).parseSection(at: 0)
+      Issue.record("30자리 generation은 malformedEntry여야 함")
+    } catch {
+      #expect(error.code == .malformedEntry)
+    }
+  }
 }

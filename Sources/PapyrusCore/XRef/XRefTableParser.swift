@@ -175,17 +175,28 @@ extension XRefTableParser {
     return cursor
   }
 
-  /// 십진 자릿수 런을 스캔한다. 자릿수 0개면 `nil`.
+  /// 십진 자릿수 런을 스캔한다. 자릿수 0개거나 `Int` 오버플로면 `nil`(호출부가
+  /// `malformedEntry`로 승격해 복구 스캔으로 폴백한다).
+  ///
+  /// 오버플로 검사: 이 스캐너는 19/20/21바이트 관용 폭을 허용하므로(파일 헤더 주석)
+  /// 자릿수 개수로 선제 차단할 수 없다 — `TrailerResolver.scanShortDigitRun`과 같은
+  /// 뮤테이션 퍼징 결함(M8) 부류라 같은 방식(`multipliedReportingOverflow`)으로 고친다.
   private func scanDigitRun(from start: Int) -> (value: Int, next: Int)? {
     var cursor = start
     var value = 0
     var digitCount = 0
+    var overflowed = false
     while let byte = self.file.byte(at: cursor), (0x30...0x39).contains(byte) {
-      value = value * 10 + Int(byte - 0x30)
+      if !overflowed {
+        let (multiplied, multiplyOverflowed) = value.multipliedReportingOverflow(by: 10)
+        let (added, addOverflowed) = multiplied.addingReportingOverflow(Int(byte - 0x30))
+        overflowed = multiplyOverflowed || addOverflowed
+        value = overflowed ? value : added
+      }
       cursor += 1
       digitCount += 1
     }
-    guard digitCount > 0 else {
+    guard digitCount > 0, !overflowed else {
       return nil
     }
     return (value, cursor)
