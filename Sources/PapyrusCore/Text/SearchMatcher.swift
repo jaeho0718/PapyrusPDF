@@ -1,4 +1,3 @@
-import CoreGraphics
 import Foundation
 
 /// 페이지 문자열 매칭 + quad 보간 (순수 함수 — ARCHITECTURE 131행 알고리즘의 구현체).
@@ -44,7 +43,7 @@ package enum SearchMatcher {
       }
       let utf16Range =
         found.lowerBound.utf16Offset(in: string)..<found.upperBound.utf16Offset(in: string)
-      let quads = Self.quads(matchRange: utf16Range, runs: content.runs)
+      let quads = TextRunGeometry.quads(forRange: utf16Range, in: content.runs)
       let (snippetText, snippetMatchRange) = Self.snippet(matchRange: utf16Range, in: string)
       results.append(
         SearchResult(
@@ -55,92 +54,6 @@ package enum SearchMatcher {
       cursor = found.upperBound // 비겹침 — 다음 탐색은 이번 매치 끝부터.
     }
     return results
-  }
-
-  /// run 하나에서 부분 구간 `[localRange.lowerBound, localRange.upperBound)`의 quad를
-  /// 보간한다. 테스트 관찰을 위해 분리 노출.
-  ///
-  /// 절대 거리 대신 전진량 비율(`t0`/`t1`)을 쓴다 — quad 변 길이가 advances 합과 미세히
-  /// 어긋나도(조립 반올림) 끝점이 quad 밖으로 나가지 않는다. lerp는 회전·기울임 quad에서도
-  /// 그대로 성립한다(축 정렬 가정 없음). 전진량 합이 0 이하인 퇴화 run은 전체 quad로
-  /// 폴백한다(0 나눗셈·NaN 없음).
-  /// - Parameters:
-  ///   - run: 대상 run.
-  ///   - localRange: run 로컬 좌표계(0 기반)의 부분 구간.
-  /// - Returns: 보간된 부분 quad.
-  package static func partialQuad(of run: TextRun, localRange: Range<Int>) -> Quad {
-    let advances = run.advances
-    let total = advances.reduce(0, +)
-    let d0 = advances[0..<localRange.lowerBound].reduce(0, +)
-    let d1 = advances[0..<localRange.upperBound].reduce(0, +)
-    let t0: CGFloat
-    let t1: CGFloat
-    if total > 0 {
-      t0 = d0 / total
-      t1 = d1 / total
-    } else {
-      t0 = 0
-      t1 = 1
-    }
-    let quad = run.quad
-    let bottomAt0 = Self.lerp(quad.bottomLeft, quad.bottomRight, t0)
-    let bottomAt1 = Self.lerp(quad.bottomLeft, quad.bottomRight, t1)
-    let topAt0 = Self.lerp(quad.topLeft, quad.topRight, t0)
-    let topAt1 = Self.lerp(quad.topLeft, quad.topRight, t1)
-    return Quad(bottomLeft: bottomAt0, bottomRight: bottomAt1, topRight: topAt1, topLeft: topAt0)
-  }
-
-  /// 두 점을 비율 `fraction`으로 선형 보간한다.
-  /// - Parameters:
-  ///   - start: `fraction == 0`일 때의 점.
-  ///   - end: `fraction == 1`일 때의 점.
-  ///   - fraction: 보간 비율.
-  /// - Returns: 보간된 점.
-  private static func lerp(_ start: CGPoint, _ end: CGPoint, _ fraction: CGFloat) -> CGPoint {
-    CGPoint(
-      x: start.x + (end.x - start.x) * fraction, y: start.y + (end.y - start.y) * fraction
-    )
-  }
-}
-
-// MARK: - quad 교차 탐색
-
-extension SearchMatcher {
-  /// 매치 구간과 교차하는 run들을 찾아 부분 quad들을 모은다.
-  ///
-  /// runs는 `range.lowerBound` 오름차순(M4 조립 순서)이므로 `upperBound >
-  /// matchRange.lowerBound`인 첫 run을 이진 탐색으로 찾고, 이후 `lowerBound <
-  /// matchRange.upperBound`인 동안 선형 순회한다 — O(log R + k).
-  /// - Parameters:
-  ///   - matchRange: 매치의 UTF-16 구간.
-  ///   - runs: 페이지의 run 목록 (오름차순).
-  /// - Returns: 교차한 run별 부분 quad (교차 run이 없으면 빈 배열).
-  private static func quads(matchRange: Range<Int>, runs: [TextRun]) -> [Quad] {
-    var low = 0
-    var high = runs.count
-    while low < high {
-      let mid = (low + high) / 2
-      if runs[mid].range.upperBound <= matchRange.lowerBound {
-        low = mid + 1
-      } else {
-        high = mid
-      }
-    }
-
-    var result: [Quad] = []
-    var index = low
-    while index < runs.count, runs[index].range.lowerBound < matchRange.upperBound {
-      let run = runs[index]
-      let intersectionStart = max(matchRange.lowerBound, run.range.lowerBound)
-      let intersectionEnd = min(matchRange.upperBound, run.range.upperBound)
-      if intersectionStart < intersectionEnd {
-        let localRange =
-          (intersectionStart - run.range.lowerBound)..<(intersectionEnd - run.range.lowerBound)
-        result.append(Self.partialQuad(of: run, localRange: localRange))
-      }
-      index += 1
-    }
-    return result
   }
 }
 

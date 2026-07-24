@@ -75,6 +75,25 @@ extension PapyrusDocument {
   public func search(
     _ query: String, options: SearchOptions = SearchOptions()
   ) -> AsyncThrowingStream<SearchResult, Error> {
+    self.search(query, options: options, provider: DocumentTextProvider(document: self))
+  }
+
+  /// `provider`가 공급한 텍스트 위에서 검색합니다. 방출 순서·캡·취소 등 그 외 계약은
+  /// ``search(_:options:)``와 동일합니다.
+  ///
+  /// 프로바이더가 throw한 페이지는 건너뜁니다. 반환 콘텐츠는 위생 검사를 거치므로
+  /// (범위 이탈 클램프·비유한 폐기·상한), 잘못된 프로바이더 값이 크래시를 일으키지
+  /// 않습니다. 페이지 수는 이 문서 기준입니다.
+  /// - Parameters:
+  ///   - query: 검색어입니다.
+  ///   - options: 검색 옵션입니다 (기본값 — 대소문자·발음 부호 무시).
+  ///   - provider: 텍스트 콘텐츠 공급원입니다.
+  /// - Throws(스트림 종료 에러): ``PapyrusError`` (`Error`로 소거 — AsyncThrowingStream
+  ///   실패 타입 제약. 실제 타입은 항상 `PapyrusError`임을 문서화합니다).
+  /// - Returns: 매치를 순서대로 방출하는 비동기 스트림입니다.
+  public func search(
+    _ query: String, options: SearchOptions = SearchOptions(), provider: any PageTextProvider
+  ) -> AsyncThrowingStream<SearchResult, Error> {
     let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedQuery.isEmpty else {
       return AsyncThrowingStream { continuation in
@@ -86,8 +105,9 @@ extension PapyrusDocument {
       let task = Task {
         do {
           let pageCount = try await self.pageCount
-          await self.driveSearch(
-            query: trimmedQuery, options: options, pageCount: pageCount, continuation: continuation
+          await Self.driveSearch(
+            query: trimmedQuery, options: options, pageCount: pageCount, provider: provider,
+            continuation: continuation
           )
           continuation.finish()
         } catch {
@@ -104,13 +124,15 @@ extension PapyrusDocument {
   ///
   /// 완료는 무순서로 도착하지만 `pending` 버퍼 + `nextEmit` 커서로 페이지 오름차순
   /// 방출을 보장한다. 페이지 1장의 추출 실패는 `try?`로 흡수해 그 페이지만 건너뛴다.
+  /// 위생 검사는 태스크 그룹 자식(병렬) 안에서 수행한다 — 방출 루프는 비블로킹이다.
   /// - Parameters:
   ///   - query: 다듬어진(빈 문자열 아님) 검색어.
   ///   - options: 검색 옵션.
   ///   - pageCount: 문서 페이지 수.
+  ///   - provider: 텍스트 콘텐츠 공급원.
   ///   - continuation: 매치를 방출할 스트림 continuation.
-  private func driveSearch(
-    query: String, options: SearchOptions, pageCount: Int,
+  private static func driveSearch(
+    query: String, options: SearchOptions, pageCount: Int, provider: any PageTextProvider,
     continuation: AsyncThrowingStream<SearchResult, Error>.Continuation
   ) async {
     guard pageCount > 0 else {
@@ -131,7 +153,10 @@ extension PapyrusDocument {
       // 페이지 1장 워밍업 태스크 추가 — 추출 실패는 `nil`로 흡수한다 (§4.2).
       func addTask(_ pageIndex: Int) {
         group.addTask {
-          (pageIndex, try? await self.text(forPage: pageIndex))
+          guard let raw = try? await provider.textContent(forPage: pageIndex) else {
+            return (pageIndex, nil)
+          }
+          return (pageIndex, PageContentSanitizer.sanitize(raw, expectedPageIndex: pageIndex))
         }
       }
 
@@ -146,18 +171,13 @@ extension PapyrusDocument {
           return
         }
         pending[index] = content
-        while let maybeContent = pending.removeValue(forKey: nextEmit) {
-          if let content = maybeContent {
-            for match in SearchMatcher.matches(in: content, query: query, options: options) {
-              totalCount += 1
-              continuation.yield(match)
-              if totalCount >= CoreLimits.maxSearchTotalMatches {
-                group.cancelAll()
-                return
-              }
-            }
-          }
-          nextEmit += 1
+        let hitCap = Self.drainPending(
+          &pending, from: &nextEmit, totalCount: &totalCount, search: (query, options),
+          continuation: continuation
+        )
+        if hitCap {
+          group.cancelAll()
+          return
         }
         if nextStart < pageCount {
           addTask(nextStart)
@@ -165,5 +185,36 @@ extension PapyrusDocument {
         }
       }
     }
+  }
+
+  /// `pending` 버퍼에서 `nextEmit` 순번이 연속으로 채워진 만큼 매치를 방출한다
+  /// (`driveSearch`의 방출 루프 추출 — 함수 길이 축소, 동작 동일).
+  /// - Parameters:
+  ///   - pending: 페이지별 위생 검사 완료 콘텐츠 버퍼 (방출한 항목은 제거된다).
+  ///   - nextEmit: 다음에 방출할 페이지 인덱스 (방출한 만큼 전진한다).
+  ///   - totalCount: 누적 방출 매치 수 (방출한 만큼 증가한다).
+  ///   - search: 다듬어진 검색어와 검색 옵션의 묶음 (파라미터 수 축소용).
+  ///   - continuation: 매치를 방출할 스트림 continuation.
+  /// - Returns: 총량 캡에 도달해 검색을 즉시 종료해야 하면 `true`.
+  private static func drainPending(
+    _ pending: inout [Int: PageTextContent?], from nextEmit: inout Int, totalCount: inout Int,
+    search: (query: String, options: SearchOptions),
+    continuation: AsyncThrowingStream<SearchResult, Error>.Continuation
+  ) -> Bool {
+    while let maybeContent = pending.removeValue(forKey: nextEmit) {
+      if let content = maybeContent {
+        for match in SearchMatcher.matches(
+          in: content, query: search.query, options: search.options
+        ) {
+          totalCount += 1
+          continuation.yield(match)
+          if totalCount >= CoreLimits.maxSearchTotalMatches {
+            return true
+          }
+        }
+      }
+      nextEmit += 1
+    }
+    return false
   }
 }

@@ -94,4 +94,8 @@ package enum CoreLimits {
 
   /// 검색 워밍업 병렬 폭 상한 (실제 폭 = min(이 값, 활성 코어 수, 페이지 수)).
   package static let maxSearchWarmupWidth = 4
+
+  /// 프로바이더 공급 페이지 문자열의 UTF-16 코드유닛 상한 (초과분 절단).
+  /// 내장 추출은 글리프 캡(500k)으로 이미 유계 — 외부 공급에 4× 여유를 준 값.
+  package static let maxProviderStringUTF16 = 2_097_152
 }
