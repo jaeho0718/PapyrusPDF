@@ -156,8 +156,10 @@ struct FuzzSmokeTests {
   }
 
   /// 여러 케이스가 전부 예산을 넘겨도, 첫 결함 발견 즉시 런이 중단된다 — 나머지 케이스는
-  /// 시작조차 대기하지 않는다(설계 가정 3). 전체 지연(20 × 5초)만큼 기다리지 않고 예산
-  /// 근방에서 반환됨을 벽시계로 확인한다.
+  /// 시작조차 대기하지 않는다(설계 가정 3). 조기 중단의 직접 증거는 `timedOutCount == 1`
+  /// (중단 없이는 20)이고, 벽시계 상한은 5초짜리 케이스 지연을 실제로 기다리지 않았음을
+  /// 확인하는 보조 증거다 — 부하 걸린 CI 러너의 스케줄링 지연을 흡수하도록 단일 케이스
+  /// 지연(5초) 미만에서 여유 있게 잡는다.
   @Test func artificialDelaysStopImmediatelyAfterFirstTimeout() async {
     let budget = FuzzBudget(perCase: .milliseconds(20), width: 4)
     let delays = Array(repeating: Duration.seconds(5), count: 20)
@@ -166,6 +168,6 @@ struct FuzzSmokeTests {
     let timedOutCount = await FuzzExecutor.runArtificialDelaysForTesting(delays, budget: budget)
     let elapsed = clock.now - start
     #expect(timedOutCount == 1)
-    #expect(elapsed < .seconds(2), "즉시 중단되지 않고 \(elapsed) 소요됨")
+    #expect(elapsed < .seconds(4), "즉시 중단되지 않고 \(elapsed) 소요됨")
   }
 }
