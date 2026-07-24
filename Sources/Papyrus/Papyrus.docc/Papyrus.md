@@ -11,9 +11,17 @@ SwiftUI 뷰어(`PapyrusUI`)의 공개 API 전체를 사용할 수 있습니다.
 `PapyrusCore`·`PapyrusUI` 타겟 문서에 있고, 내부 구조와 설계 원칙은
 <doc:Architecture>에 정리되어 있습니다.
 
+세 타겟의 심벌을 모듈 경계 없이 한 아카이브로 보고 싶다면, 패키지를 체크아웃한 뒤
+아래 명령으로 통합 문서를 생성할 수 있습니다(Swift 6.x DocC 실험적 기능).
+
+```bash
+swift package generate-documentation --enable-experimental-combined-documentation
+```
+
 ## Topics
 
 ### 시작하기
 
 - <doc:GettingStarted>
+- <doc:ViewerGuide>
 - <doc:Architecture>

@@ -109,10 +109,18 @@ for warning in document.openWarnings {
 
 ## 문서
 
-DocC 문서를 생성합니다.
+DocC 문서를 타겟별로 생성합니다.
 
 ```bash
 swift package generate-documentation --target Papyrus
+```
+
+`PapyrusCore`·`PapyrusUI`·`Papyrus` 세 타겟의 심벌을 하나의 아카이브로 합친 통합
+문서가 필요하면(예: `import Papyrus` 하나로 쓰는 소비자에게 모듈 경계 없이 전체
+API를 보여주고 싶을 때) 다음을 사용하세요. Swift 6.x DocC의 실험적 기능입니다.
+
+```bash
+swift package generate-documentation --enable-experimental-combined-documentation
 ```
 
 아키텍처·동시성 모델·설계 근거 전문은 [Docs/ARCHITECTURE.md](Docs/ARCHITECTURE.md)를 참고하세요.
