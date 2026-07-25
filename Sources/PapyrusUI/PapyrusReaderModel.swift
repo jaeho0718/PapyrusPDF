@@ -93,6 +93,9 @@ public final class PapyrusReaderModel {
   /// 검색 상태입니다 (기본 `.idle`).
   public private(set) var searchState: ReaderSearchState = .idle
 
+  /// 현재 텍스트 선택입니다 (없으면 `nil`). 드래그 중에도 실시간으로 갱신됩니다.
+  public private(set) var selection: TextSelection?
+
   /// 연결된 코어 (연결 전 `nil`).
   private var core: ReaderCore?
 
@@ -102,6 +105,10 @@ public final class PapyrusReaderModel {
   /// 연결 전 접수되어 연결 직후 재생될 검색 (최신 것만 유지 — 탐색 명령과 별도 슬롯이라
   /// 서로를 밀어내지 않는다).
   private var pendingSearch: (query: String, options: SearchOptions)?
+
+  /// 연결 전 접수되어 연결 직후 재생될 선택 (최신 것만 유지 — 탐색·검색과 별도 슬롯이라
+  /// 서로를 밀어내지 않는다).
+  private var pendingSelection: TextSelection?
 
   /// 모델을 만듭니다.
   public init() {}
@@ -189,10 +196,38 @@ public final class PapyrusReaderModel {
     self.core?.advanceMatch(by: -1)
   }
 
+  /// 선택을 해제합니다 (선택 메뉴도 닫힙니다).
+  public func clearSelection() {
+    self.pendingSelection = nil
+    self.core?.clearSelection()
+  }
+
+  /// 프로그램적으로 선택합니다. 적재 전 호출은 보류됐다가 적재 완료 직후 적용됩니다.
+  /// 범위는 소비 시점에 페이지·문자열 경계로 클램프되므로 안전합니다.
+  /// - Parameter selection: 채택할 선택입니다.
+  public func select(_ selection: TextSelection) {
+    guard let core else {
+      self.pendingSelection = selection
+      return
+    }
+    core.select(selection)
+  }
+
+  /// 현재 선택의 문자열입니다 (페이지 경계는 개행으로 결합). 선택이 없거나 적재 전이면
+  /// `nil`입니다. 매우 긴 선택은 내부 상한에서 잘립니다.
+  /// - Returns: 조립된 선택 문자열입니다.
+  public func selectedString() async -> String? {
+    guard let core else {
+      return nil
+    }
+    return await core.selectedString()
+  }
+
   /// 새 조립 시작을 반영한다 (`ReaderSession` 전용 — 문서 교체 시 이전 코어 연결 해제).
   func beginLoading() {
     self.core?.onStateChange = nil
     self.core?.onSearchStateChange = nil
+    self.core?.onSelectionChange = nil
     self.core = nil
     self.loadState = .loading
     self.pageCount = 0
@@ -200,10 +235,12 @@ public final class PapyrusReaderModel {
     self.visiblePageRange = 0..<0
     self.zoomScale = 1
     self.searchState = .idle
+    self.selection = nil
     self.pendingSearch = nil
+    self.pendingSelection = nil
   }
 
-  /// 코어에 연결하고 보류된 명령·검색을 1회 재생한다 (`ReaderSession` 전용).
+  /// 코어에 연결하고 보류된 명령·검색·선택을 1회 재생한다 (`ReaderSession` 전용).
   /// - Parameter core: 연결할 코어.
   func attach(core: ReaderCore) {
     self.core = core
@@ -214,15 +251,20 @@ public final class PapyrusReaderModel {
     core.onSearchStateChange = { [weak self] state in
       self?.searchState = state
     }
+    core.onSelectionChange = { [weak self] selection in
+      self?.selection = selection
+    }
     self.loadState = .ready
     self.replayPendingCommand()
     self.replayPendingSearch()
+    self.replayPendingSelection()
   }
 
   /// 코어와의 연결을 해제한다 (`ReaderSession` 전용).
   func detachCore() {
     self.core?.onStateChange = nil
     self.core?.onSearchStateChange = nil
+    self.core?.onSelectionChange = nil
     self.core = nil
   }
 
@@ -261,5 +303,14 @@ public final class PapyrusReaderModel {
     }
     self.pendingSearch = nil
     self.search(pending.query, options: pending.options)
+  }
+
+  /// 연결 전 접수된 선택을 1회 재생한다.
+  private func replayPendingSelection() {
+    guard let pending = self.pendingSelection else {
+      return
+    }
+    self.pendingSelection = nil
+    self.select(pending)
   }
 }

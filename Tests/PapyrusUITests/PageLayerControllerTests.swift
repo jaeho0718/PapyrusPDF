@@ -1,4 +1,5 @@
 import CoreGraphics
+import PapyrusCore
 import PapyrusRendering
 import PapyrusUI
 import QuartzCore
@@ -162,6 +163,43 @@ struct PageLayerControllerTests {
     // 가장 오래된(첫 번째) 강등분은 제거되고, 가장 최근 강등분은 남아 있어야 한다.
     #expect(!sublayers.contains { $0.frame.origin.x == 10 })
     #expect(sublayers.contains { $0.frame.origin.x == CGFloat(total) * 10 })
+  }
+
+  // MARK: 선택 오버레이 — setSelection/clearSelection/prepareForReuse
+
+  /// 설계 §3(필수 불변식): `prepareForReuse` 후 선택 오버레이도 하이라이트와 함께 지워진다.
+  @Test func prepareForReuseClearsSelection() {
+    let controller = PageLayerController()
+    controller.configure(pageIndex: 0, frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+    let quad = Quad(
+      bottomLeft: CGPoint(x: 0, y: 10), bottomRight: CGPoint(x: 10, y: 10),
+      topRight: CGPoint(x: 10, y: 0), topLeft: CGPoint(x: 0, y: 0)
+    )
+    controller.setSelection([quad], handles: nil, handleScale: 1)
+
+    let before = (controller.overlayLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    #expect(before.contains { !($0.path?.isEmpty ?? true) })
+
+    controller.prepareForReuse()
+
+    let after = (controller.overlayLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    #expect(after.allSatisfy { $0.path == nil })
+  }
+
+  /// `setSelection`으로 빈 quad·핸들 nil을 넘기면 `clearSelection`과 동일하게 동작한다.
+  @Test func setSelectionWithEmptyQuadsClearsPath() {
+    let controller = PageLayerController()
+    controller.configure(pageIndex: 0, frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+    let quad = Quad(
+      bottomLeft: CGPoint(x: 0, y: 10), bottomRight: CGPoint(x: 10, y: 10),
+      topRight: CGPoint(x: 10, y: 0), topLeft: CGPoint(x: 0, y: 0)
+    )
+    controller.setSelection([quad], handles: nil, handleScale: 1)
+
+    controller.setSelection([], handles: nil, handleScale: 1)
+
+    let shapeLayers = (controller.overlayLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    #expect(shapeLayers.allSatisfy { $0.path?.isEmpty ?? true })
   }
 
   // MARK: POOL1 — 재활용 풀

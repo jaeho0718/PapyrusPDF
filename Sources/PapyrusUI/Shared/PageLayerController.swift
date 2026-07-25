@@ -1,4 +1,5 @@
 import CoreGraphics
+import PapyrusCore
 import PapyrusRendering
 import QuartzCore
 
@@ -47,6 +48,9 @@ package final class PageLayerController {
 
   /// 지연 생성 하이라이트 오버레이 (검색 미사용 페이지는 비용 0).
   private var highlightOverlay: HighlightOverlay?
+
+  /// 지연 생성 선택 오버레이 (선택 미사용 페이지는 비용 0).
+  private var selectionOverlay: SelectionOverlay?
 
   /// 컨트롤러를 만든다.
   package init() {
@@ -162,12 +166,35 @@ package final class PageLayerController {
     self.highlightOverlay?.clear()
   }
 
-  /// 버킷 전환 시 하이라이트 선명도를 갱신한다 (오버레이 미생성이면 no-op).
+  /// 선택 quad·핸들을 표시한다 (없던 오버레이는 지연 생성. `quads` 비고 `handles` `nil`이면
+  /// ``clearSelection()``과 동일하다).
+  /// - Parameters:
+  ///   - quads: 표시할 표시 공간 quad 목록.
+  ///   - handles: 핸들 배치 (macOS는 항상 `nil`).
+  ///   - handleScale: 1/zoom (핸들 치수 화면 고정).
+  package func setSelection(
+    _ quads: [Quad], handles: SelectionHandlePlacement?, handleScale: CGFloat
+  ) {
+    let overlay = self.selectionOverlay ?? {
+      let created = SelectionOverlay(parent: self.overlayLayer)
+      self.selectionOverlay = created
+      return created
+    }()
+    overlay.apply(quads: quads, handles: handles, handleScale: handleScale)
+  }
+
+  /// 선택 표시를 지운다 (오버레이 미생성이면 no-op).
+  package func clearSelection() {
+    self.selectionOverlay?.clear()
+  }
+
+  /// 버킷 전환 시 오버레이(검색+선택) 선명도를 일괄 갱신한다 (미생성 오버레이는 no-op).
   /// - Parameters:
   ///   - screenScale: 화면 배율(픽셀 밀도).
   ///   - bucketScale: 현재 스케일 버킷 배율.
-  package func updateHighlightContentsScale(screenScale: CGFloat, bucketScale: CGFloat) {
+  package func updateOverlayContentsScale(screenScale: CGFloat, bucketScale: CGFloat) {
     self.highlightOverlay?.updateContentsScale(screenScale: screenScale, bucketScale: bucketScale)
+    self.selectionOverlay?.updateContentsScale(screenScale: screenScale, bucketScale: bucketScale)
   }
 
   /// 풀 반환 준비: 전 레이어 contents 해제·서브레이어 정리·pageIndex nil.
@@ -185,8 +212,9 @@ package final class PageLayerController {
     self.staleTileLayers.removeAll()
     self.pageIndex = nil
     self.currentBucket = nil
-    // 재활용 풀 경유 시 이전 페이지 하이라이트 잔류 방지 (필수 불변식).
+    // 재활용 풀 경유 시 이전 페이지 하이라이트·선택 잔류 방지 (필수 불변식).
     self.clearSearchHighlights()
+    self.clearSelection()
   }
 
   /// 새 타일 frame에 완전히 포함되는 스테일 레이어를 제거한다 (§4.5 규칙 1, 여유 ε).

@@ -90,9 +90,19 @@ final class ReaderSession {
           configuration: RenderConfiguration(pixelScale: pixelScale)
         )
         let coordinator = ReaderSearchCoordinator(document: document)
+        let selectablePageStore = ReaderSelectablePageStore(
+          provider: DocumentTextProvider(document: document),
+          displayTransform: { [document] pageIndex in
+            guard let info = try? await document.page(at: pageIndex) else {
+              return .identity
+            }
+            return info.displayTransform
+          }
+        )
+        let selectionController = ReaderSelectionController(store: selectablePageStore)
         let core = ReaderCore(
           layout: layout, renderQueue: renderQueue, pixelScale: pixelScale,
-          searchCoordinator: coordinator
+          searchCoordinator: coordinator, selectionController: selectionController
         )
         guard let self, !Task.isCancelled else {
           return

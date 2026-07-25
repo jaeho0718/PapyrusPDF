@@ -1,4 +1,5 @@
 import CoreGraphics
+import PapyrusCore
 import PapyrusRendering
 import QuartzCore
 
@@ -77,6 +78,12 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 마지막으로 통지한 검색 상태 (query·phase 보존용 — `advanceMatch`가 재사용한다).
   var currentSearchState: ReaderSearchState = .idle
 
+  /// 선택 컨트롤러 (선택 미사용 조립이면 `nil` — 기존 테스트 영향 없음).
+  let selectionController: ReaderSelectionController?
+
+  /// 선택 변경 통지 (모델이 구독).
+  package var onSelectionChange: ((TextSelection?) -> Void)?
+
   /// `documentUnavailable` 래치 — 이후 페치 태스크 스폰을 중단한다.
   var renderingUnavailable = false
 
@@ -94,17 +101,32 @@ package final class ReaderCore: ReaderHostEventSink {
   ///   - pixelScale: 화면 배율 (`renderQueue`와 동일 값 — 기본 2, `RenderConfiguration`
   ///     기본값과 정합).
   ///   - searchCoordinator: 검색 코디네이터 (기본 `nil` — 검색 미사용 조립).
+  ///   - selectionController: 선택 컨트롤러 (기본 `nil` — 선택 미사용 조립).
   package init(
     layout: ReaderLayoutEngine, renderQueue: TileRenderQueue, pixelScale: CGFloat = 2,
-    searchCoordinator: ReaderSearchCoordinator? = nil
+    searchCoordinator: ReaderSearchCoordinator? = nil,
+    selectionController: ReaderSelectionController? = nil
   ) {
     self.layout = layout
     self.renderQueue = renderQueue
     self.pixelScale = pixelScale
     self.currentBucket = ScaleBucket(exponent: 0)
     self.searchCoordinator = searchCoordinator
+    self.selectionController = selectionController
     searchCoordinator?.onEvent = { [weak self] event in
       self?.handleSearchEvent(event)
+    }
+    selectionController?.onSelectionChange = { [weak self] selection in
+      self?.onSelectionChange?(selection)
+    }
+    selectionController?.onOverlayInvalidate = { [weak self] pageIndex in
+      self?.applySelection(toPage: pageIndex)
+    }
+    selectionController?.onMenuRequest = { [weak self] anchorPage in
+      self?.presentDefaultMenu(anchorPage: anchorPage)
+    }
+    selectionController?.onMenuDismiss = { [weak self] in
+      (self?.host as? ReaderMenuPresenting)?.dismissSelectionMenu()
     }
   }
 
@@ -140,6 +162,8 @@ package final class ReaderCore: ReaderHostEventSink {
     self.searchHighlights.removeAll()
     self.searchMatchIndex.removeAll()
     self.currentMatchFlatIndex = nil
+
+    self.selectionController?.teardown()
   }
 
   // MARK: - ReaderHostEventSink
@@ -167,6 +191,7 @@ package final class ReaderCore: ReaderHostEventSink {
     )
     self.updateMaterialization(to: materialized)
     self.updateFetches(visible: visible, rect: rect)
+    self.selectionController?.prefetch(range: materialized)
 
     let viewport = VisibleRangeCalculator.renderViewport(
       layout: self.layout, visibleContentRect: rect, scaleBucket: self.currentBucket,
@@ -185,11 +210,13 @@ package final class ReaderCore: ReaderHostEventSink {
       return
     }
     self.currentBucket = newBucket
-    for controller in self.controllers.values {
+    for (pageIndex, controller) in self.controllers {
       controller.activateBucket(newBucket)
-      controller.updateHighlightContentsScale(
+      controller.updateOverlayContentsScale(
         screenScale: self.pixelScale, bucketScale: newBucket.scale
       )
+      // 핸들 치수는 화면 고정(1/zoom)이라 줌 종료 시 재계산해 재적용한다 (§0.2-5).
+      self.applySelection(toPage: pageIndex)
     }
     for (pageIndex, controller) in self.controllers {
       self.fillCacheHits(forPage: pageIndex, controller: controller, host: host)
