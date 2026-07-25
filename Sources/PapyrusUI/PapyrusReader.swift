@@ -15,6 +15,9 @@ public struct PapyrusReader: View {
   /// 관찰·제어 모델.
   private let model: PapyrusReaderModel
 
+  /// 주입된 텍스트 공급원 (`nil`이면 내장 추출 — 조립 시 해소).
+  private let textProvider: (any PageTextProvider)?
+
   /// 내부 세션 (뷰 수명에 부착).
   @State private var session = ReaderSession()
 
@@ -25,12 +28,25 @@ public struct PapyrusReader: View {
   @Environment(\.papyrusSelectionMenu) private var selectionMenuBuilder
 
   /// 뷰어를 만듭니다.
+  ///
+  /// `textProvider`를 지정하면 뷰어의 텍스트 선택·복사·검색이 내장 텍스트 추출 대신
+  /// 그 공급원의 텍스트 위에서 동작합니다 — 스캔 PDF에 OCR 결과를 연결하는 용도입니다.
+  /// 좌표 변환 헬퍼와 예제는 패키지 문서의 OCR 연결 가이드를 참고하세요. 공급원은 문서
+  /// 적재 시점에 한 번 포착됩니다 — 같은 문서를 표시한 채 이 인자만 바꾸는 것은
+  /// 반영되지 않으며, 교체하려면 문서를 교체하거나 뷰에 새 `id(_:)`를 부여해 다시
+  /// 만들어야 합니다.
   /// - Parameters:
   ///   - document: 표시할 문서입니다 (열린 상태).
   ///   - model: 관찰·제어 모델입니다. 같은 모델을 목차 사이드바 등과 공유합니다.
-  public init(document: PapyrusDocument, model: PapyrusReaderModel) {
+  ///   - textProvider: 선택·검색이 소비할 텍스트 공급원입니다 (`nil`이면 문서의 내장
+  ///     텍스트 추출을 사용합니다).
+  public init(
+    document: PapyrusDocument, model: PapyrusReaderModel,
+    textProvider: (any PageTextProvider)? = nil
+  ) {
     self.document = document
     self.model = model
+    self.textProvider = textProvider
   }
 
   /// 뷰 본문입니다.
@@ -53,7 +69,8 @@ public struct PapyrusReader: View {
     }
     .task(id: ObjectIdentifier(self.document)) {
       self.session.assemble(
-        document: self.document, model: self.model, pixelScale: self.displayScale
+        document: self.document, model: self.model, pixelScale: self.displayScale,
+        textProvider: self.textProvider
       )
     }
     .onDisappear {
@@ -77,9 +94,16 @@ final class ReaderSession {
   ///   - document: 조립 대상 문서.
   ///   - model: 연결할 모델.
   ///   - pixelScale: 렌더 서비스에 고정할 화면 배율.
-  func assemble(document: PapyrusDocument, model: PapyrusReaderModel, pixelScale: CGFloat) {
+  ///   - textProvider: 주입된 텍스트 공급원 (`nil`이면 `DocumentTextProvider`로 해소).
+  func assemble(
+    document: PapyrusDocument, model: PapyrusReaderModel, pixelScale: CGFloat,
+    textProvider: (any PageTextProvider)?
+  ) {
     self.tearDown()
     model.beginLoading(documentID: ObjectIdentifier(document))
+    // 세션당 정확히 1회 해소 — 검색 코디네이터·선택 스토어가 같은 인스턴스를 공유한다.
+    let provider: any PageTextProvider =
+      textProvider ?? DocumentTextProvider(document: document)
     self.assembleTask = Task { [weak self] in
       do {
         let snapshot = try await document.core.pageTree()
@@ -92,9 +116,9 @@ final class ReaderSession {
           documentData: document.core.sourceBytes, pageSizes: pageSizes,
           configuration: RenderConfiguration(pixelScale: pixelScale)
         )
-        let coordinator = ReaderSearchCoordinator(document: document)
+        let coordinator = ReaderSearchCoordinator(document: document, provider: provider)
         let selectablePageStore = ReaderSelectablePageStore(
-          provider: DocumentTextProvider(document: document),
+          provider: provider,
           displayTransform: { [document] pageIndex in
             guard let info = try? await document.page(at: pageIndex) else {
               return .identity

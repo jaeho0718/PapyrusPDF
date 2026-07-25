@@ -30,8 +30,8 @@ package final class ReaderSelectablePageStore {
 
   /// 스토어를 만든다.
   /// - Parameters:
-  ///   - provider: 텍스트 공급원 (현재는 항상 `DocumentTextProvider` — 다른 공급원 주입은
-  ///     향후 일반화될 확장점이다).
+  ///   - provider: 텍스트 공급원 (기본은 `DocumentTextProvider`, `PapyrusReader`의
+  ///     `textProvider` 주입 시 그 공급원 — 검색 코디네이터와 같은 인스턴스를 공유한다).
   ///   - displayTransform: 페이지 표시 변환 공급 클로저 (실패 시 `.identity` 반환 계약 —
   ///     테스트에서 문서 없이 주입 가능하도록 클로저로 둔다).
   package init(
@@ -102,14 +102,18 @@ package final class ReaderSelectablePageStore {
 
   /// 페이지 문자열을 비동기로 얻는다 (캐시 우선, 미스면 프로바이더 직행 —
   /// 캐시에 넣지 않는다: 복사 경로의 일회성 소비가 창 정책을 어지럽히지 않게).
-  /// 실패 페이지는 빈 문자열이다.
+  /// 실패 페이지는 빈 문자열이다. 미스 경로도 위생 검사를 거친다 — 선택 오프셋
+  /// 좌표계(위생 통과 문자열)와 조립 문자열이 캐시 상태와 무관하게 일치해야 한다.
   /// - Parameter pageIndex: 조회할 페이지 인덱스.
   /// - Returns: 페이지 문자열 (실패 시 빈 문자열).
   package func pageString(forPage pageIndex: Int) async -> String {
     if let cached = self.cache[pageIndex] {
       return cached.content.string
     }
-    return (try? await self.provider.textContent(forPage: pageIndex))?.string ?? ""
+    guard let raw = try? await self.provider.textContent(forPage: pageIndex) else {
+      return ""
+    }
+    return PageContentSanitizer.sanitize(raw, expectedPageIndex: pageIndex).string
   }
 
   /// 페이지 표시 변환의 동기 조회 (memoize 캐시 전용 — 미보유면 `nil`, 로드는 시작하지

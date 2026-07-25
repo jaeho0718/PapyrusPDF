@@ -24,6 +24,7 @@ swift package generate-documentation --enable-experimental-combined-documentatio
 
 - <doc:GettingStarted>
 - <doc:ViewerGuide>
+- <doc:ConnectingOCR>
 - <doc:Architecture>
 
 ### 참고

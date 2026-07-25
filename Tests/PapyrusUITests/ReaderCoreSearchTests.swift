@@ -183,7 +183,9 @@ struct ReaderCoreSearchTests {
     let (_, document) = try await Self.makeSearchableCore(pages: [
       Self.page(text: "alpha beta"), Self.page(text: "alpha beta")
     ])
-    let coordinator = ReaderSearchCoordinator(document: document)
+    let coordinator = ReaderSearchCoordinator(
+      document: document, provider: DocumentTextProvider(document: document)
+    )
     var events: [SearchEvent] = []
     coordinator.onEvent = { events.append($0) }
 
@@ -287,7 +289,9 @@ extension ReaderCoreSearchTests {
     let renderQueue = TileRenderQueue(
       documentData: document.core.sourceBytes, pageSizes: pageSizes, configuration: configuration
     )
-    let coordinator = ReaderSearchCoordinator(document: document)
+    let coordinator = ReaderSearchCoordinator(
+      document: document, provider: DocumentTextProvider(document: document)
+    )
     let core = ReaderCore(layout: layout, renderQueue: renderQueue, searchCoordinator: coordinator)
     return (core, document)
   }
