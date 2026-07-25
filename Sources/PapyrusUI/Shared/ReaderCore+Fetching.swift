@@ -42,6 +42,7 @@ extension ReaderCore {
       self.fillCacheHits(forPage: pageIndex, controller: controller, host: host)
       self.applyHighlights(to: controller, pageIndex: pageIndex)
       self.applySelection(toPage: pageIndex)
+      self.applyPersistentHighlights(toPage: pageIndex)
     }
   }
 

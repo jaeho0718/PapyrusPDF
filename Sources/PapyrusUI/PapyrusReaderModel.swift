@@ -100,13 +100,18 @@ public final class PapyrusReaderModel {
   /// 배타입니다 — 텍스트 드래그가 시작되면 해제됩니다.
   public private(set) var selectedRegion: SelectableRegion?
 
-  /// 연결된 코어 (연결 전 `nil`).
-  private var core: ReaderCore?
+  /// 연결된 코어 (연결 전 `nil`). 파일 분할(`+Highlights.swift`) 접근을 위해 internal.
+  var core: ReaderCore?
 
   /// 선택 가능 영역 등록부입니다 (진실 원천 — 컨트롤러는 attach 시 재생되는 작업
   /// 사본을 보관합니다). 같은 문서의 재조립에서는 유지되고, 다른 문서로 바뀔 때만
   /// 리셋됩니다.
   private var regionsByPage: [Int: [SelectableRegion]] = [:]
+
+  /// 하이라이트 등록부입니다 (진실 원천 — 코어는 attach 시 재생되는 작업 사본을
+  /// 보관합니다). 같은 문서의 재조립에서는 유지되고, 다른 문서로 바뀔 때만 리셋됩니다.
+  /// 파일 분할(`+Highlights.swift`) 접근을 위해 internal.
+  var highlightRegistry = HighlightRegistry()
 
   /// 마지막으로 적재를 시작한 문서의 신원 (문서 교체 판정용).
   private var lastDocumentID: ObjectIdentifier?
@@ -269,10 +274,10 @@ public final class PapyrusReaderModel {
 
   /// 새 조립 시작을 반영한다 (`ReaderSession` 전용 — 문서 교체 시 이전 코어 연결 해제).
   ///
-  /// 영역 등록부는 `documentID`가 직전 적재와 같으면(같은 문서 재조립) 유지되고,
-  /// 다르면 리셋된다 — `pendingSearch`/`pendingSelection`과 달리 일시 상태가 아니라
-  /// 개발자 소유 영속 데이터이기 때문이다. `selectedRegion`은 일시 상태이므로 항상
-  /// `nil`로 리셋된다.
+  /// 영역·하이라이트 등록부는 `documentID`가 직전 적재와 같으면(같은 문서 재조립)
+  /// 유지되고, 다르면 리셋된다 — `pendingSearch`/`pendingSelection`과 달리 일시 상태가
+  /// 아니라 개발자 소유 영속 데이터이기 때문이다. `selectedRegion`은 일시 상태이므로
+  /// 항상 `nil`로 리셋된다.
   /// - Parameter documentID: 새로 적재할 문서의 신원.
   func beginLoading(documentID: ObjectIdentifier) {
     self.core?.onStateChange = nil
@@ -295,6 +300,7 @@ public final class PapyrusReaderModel {
     // 지워지면 안 되므로, 리셋은 직전 문서가 실제로 존재하고 다를 때만 수행한다.
     if let lastDocumentID = self.lastDocumentID, lastDocumentID != documentID {
       self.regionsByPage.removeAll()
+      self.highlightRegistry = HighlightRegistry()
     }
     self.lastDocumentID = documentID
   }
@@ -323,6 +329,7 @@ public final class PapyrusReaderModel {
     self.replayPendingCommand()
     self.replayPendingSearch()
     self.replayRegions()
+    self.replayHighlights()
     self.replayPendingSelection()
   }
 

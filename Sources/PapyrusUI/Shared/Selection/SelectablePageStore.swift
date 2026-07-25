@@ -122,6 +122,30 @@ package final class ReaderSelectablePageStore {
     self.transformCache[pageIndex]
   }
 
+  /// 지오메트리를 비동기로 얻는다 (캐시 우선, 미스면 일회성 구축 — 캐시에 넣지
+  /// 않는다: 하이라이트 생성의 일회성 소비가 창 정책을 어지럽히지 않게,
+  /// `pageString(forPage:)` 전례). 구축에 쓴 표시 변환은 memoize한다 (변환은 문서
+  /// 기하의 순수 함수 — 기존 `transformCache` 불변 계약과 동일). 실패 페이지는 빈
+  /// 지오메트리다.
+  /// - Parameter pageIndex: 조회할 페이지 인덱스.
+  /// - Returns: 페이지 지오메트리 (실패 시 빈 지오메트리).
+  package func loadedGeometry(forPage pageIndex: Int) async -> SelectionGeometry {
+    if let cached = self.cache[pageIndex] {
+      return cached
+    }
+    let transformProvider: @Sendable (Int) async -> CGAffineTransform
+    if let cachedTransform = self.transformCache[pageIndex] {
+      transformProvider = { _ in cachedTransform }
+    } else {
+      transformProvider = self.displayTransform
+    }
+    let result = await Self.loadGeometry(
+      page: pageIndex, provider: self.provider, transform: transformProvider
+    )
+    self.transformCache[pageIndex] = result.transform
+    return result.geometry
+  }
+
   /// 전부 무효화: 세대 증가, 인플라이트 취소, 캐시 비움 (teardown 경로).
   package func invalidateAll() {
     self.generation += 1

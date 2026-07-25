@@ -87,6 +87,10 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 영역 선택 변경 통지 (모델이 구독).
   package var onRegionSelectionChange: ((SelectableRegion?) -> Void)?
 
+  /// 페이지 → 하이라이트 mirror (모델이 diff 통지로 채운다 — attach 재생 포함).
+  /// 페이지 공간 quad 그대로 보관하고 표시 변환은 반영 시점에 적용한다.
+  var persistentHighlights: [Int: [Highlight]] = [:]
+
   /// 공개 선택 메뉴 빌더 (`View.papyrusSelectionMenu(_:)` → Environment 전파 종점).
   ///
   /// 환경 변화 → body 재평가 → 대입으로 반영된다. 표시 중인 메뉴에는 소급 적용하지
@@ -151,6 +155,9 @@ package final class ReaderCore: ReaderHostEventSink {
     }
     selectionController?.onOverlayInvalidate = { [weak self] pageIndex in
       self?.applySelection(toPage: pageIndex)
+    }
+    selectionController?.onPageContentReady = { [weak self] pageIndex in
+      self?.applyPersistentHighlights(toPage: pageIndex)
     }
     selectionController?.onMenuRequest = { [weak self] anchorPage in
       self?.menuPresentationTask?.cancel()

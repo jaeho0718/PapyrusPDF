@@ -115,11 +115,11 @@ struct ContentView: View {
     }
   }
 
-  /// M11/M12 선택 메뉴 데모: 텍스트 선택엔 커스텀 항목 2개 + 기본 복사, 영역
-  /// 선택(``SelectableRegion``, 페이지 0에 등록됨)엔 metadata를 표시하는 커스텀 항목
-  /// 1개를 반환한다. 액션은 모두 액션 실행 시점의 선택 컨텍스트를 실제로 수신·사용해,
-  /// `.papyrusSelectionMenu`가 항목마다 정확한 컨텍스트를 전달하는지 눈으로 확인할 수
-  /// 있다.
+  /// M11/M12/M14 선택 메뉴 데모: 텍스트 선택엔 커스텀 항목 4개(검색·길이 표시·하이라이트
+  /// 2색) + 기본 복사, 영역 선택(``SelectableRegion``, 페이지 0에 등록됨)엔 metadata를
+  /// 표시하는 커스텀 항목 1개를 반환한다. 액션은 모두 액션 실행 시점의 선택 컨텍스트를
+  /// 실제로 수신·사용해, `.papyrusSelectionMenu`가 항목마다 정확한 컨텍스트를 전달하는지
+  /// 눈으로 확인할 수 있다.
   /// - Parameter context: 선택 컨텍스트 (`.text` 또는 `.region`).
   /// - Returns: 표시할 메뉴 항목.
   private func selectionMenuItems(for context: SelectionContext) -> [SelectionMenuItem] {
@@ -142,6 +142,8 @@ struct ContentView: View {
           let preview = text.count > 40 ? "\(text.prefix(40))…" : text
           self.selectionNotice = "\(text.count) characters selected: “\(preview)”"
         },
+        self.highlightMenuItem(color: .yellow, title: "Highlight (Yellow)"),
+        self.highlightMenuItem(color: .green, title: "Highlight (Green)"),
         .copy
       ]
     case .region:
@@ -155,6 +157,30 @@ struct ContentView: View {
           self.selectionNotice = "Region “\(region.id)” on page \(region.pageIndex + 1): \(caption)"
         }
       ]
+    }
+  }
+
+  /// M14 데모: 텍스트 선택 → 하이라이트 생성·등록·선택 해제 (설계 §3.4 레시피 그대로 —
+  /// `makeHighlights(from:color:)` → `addHighlights(_:)` → `clearSelection()`). 색 2종
+  /// (Yellow/Green) 메뉴 항목으로 등록해 색상별 레이어 그룹핑을 눈으로 확인할 수 있다.
+  /// 실체화되지 않은 선택 중간 페이지도 `makeHighlights`가 비동기로 처리하므로 `Task`로
+  /// 감싼다.
+  /// - Parameters:
+  ///   - color: 등록할 하이라이트 색.
+  ///   - title: 메뉴 표시 타이틀.
+  /// - Returns: 실행 시 위 레시피를 비동기로 수행하는 메뉴 항목.
+  private func highlightMenuItem(color: HighlightColor, title: String) -> SelectionMenuItem {
+    SelectionMenuItem(title: title, systemImage: "highlighter") { context in
+      guard case let .text(textContext) = context else {
+        return
+      }
+      Task {
+        let highlights = await self.loader.readerModel.makeHighlights(
+          from: textContext.selection, color: color
+        )
+        self.loader.readerModel.addHighlights(highlights)
+        self.loader.readerModel.clearSelection()
+      }
     }
   }
 

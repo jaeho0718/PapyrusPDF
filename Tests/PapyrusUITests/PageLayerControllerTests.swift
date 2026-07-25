@@ -186,6 +186,38 @@ struct PageLayerControllerTests {
     #expect(after.allSatisfy { $0.path == nil })
   }
 
+  // MARK: 지속 하이라이트 오버레이 — setPersistentHighlights/clearPersistentHighlights/prepareForReuse
+
+  /// 설계(M14 §3): `prepareForReuse` 후 지속 하이라이트도 검색·선택과 함께 지워진다.
+  @Test func prepareForReuseClearsPersistentHighlights() {
+    let controller = PageLayerController()
+    controller.configure(pageIndex: 0, frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+    let quad = Quad(rect: CGRect(x: 0, y: 0, width: 10, height: 10))
+    controller.setPersistentHighlights([PersistentHighlightGroup(color: .yellow, quads: [quad])])
+
+    let before = (controller.overlayLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    #expect(before.contains { !($0.path?.isEmpty ?? true) })
+
+    controller.prepareForReuse()
+
+    let after = (controller.overlayLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    #expect(after.allSatisfy { $0.path == nil })
+  }
+
+  /// 빈 배열로 `setPersistentHighlights`를 호출하면 `clearPersistentHighlights`와 동일하게
+  /// 서브레이어가 전부 제거된다 (레이어 재구축 전략 — §2.5).
+  @Test func setPersistentHighlightsWithEmptyGroupsClearsLayers() {
+    let controller = PageLayerController()
+    controller.configure(pageIndex: 0, frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+    let quad = Quad(rect: CGRect(x: 0, y: 0, width: 10, height: 10))
+    controller.setPersistentHighlights([PersistentHighlightGroup(color: .yellow, quads: [quad])])
+
+    controller.setPersistentHighlights([])
+
+    let shapeLayers = (controller.overlayLayer.sublayers ?? []).compactMap { $0 as? CAShapeLayer }
+    #expect(shapeLayers.isEmpty)
+  }
+
   /// `setSelection`으로 빈 quad·핸들 nil을 넘기면 `clearSelection`과 동일하게 동작한다.
   @Test func setSelectionWithEmptyQuadsClearsPath() {
     let controller = PageLayerController()

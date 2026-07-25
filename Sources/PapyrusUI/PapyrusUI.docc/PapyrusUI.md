@@ -30,3 +30,15 @@ SwiftUI 퍼사드와 가상화 스크롤 뷰어.
 ### 선택 가능 영역
 
 - ``SelectableRegion``
+
+### 지속 하이라이트
+
+- ``Highlight``
+- ``HighlightColor``
+- ``PapyrusReaderModel/addHighlights(_:)``
+- ``PapyrusReaderModel/addHighlight(_:)``
+- ``PapyrusReaderModel/removeHighlight(id:)``
+- ``PapyrusReaderModel/removeAllHighlights()``
+- ``PapyrusReaderModel/highlights(forPage:)``
+- ``PapyrusReaderModel/allHighlights``
+- ``PapyrusReaderModel/makeHighlights(from:color:)``

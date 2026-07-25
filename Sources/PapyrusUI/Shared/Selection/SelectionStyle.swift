@@ -41,6 +41,9 @@ package enum UILimits {
   /// 페이지당 선택 가능 영역 등록 상한 (초과분은 앞에서부터 유지, 절단) — 탭 히트테스트
   /// O(영역 수)의 결정적 유계.
   package static let maxSelectableRegionsPerPage = 1_024
+  /// 페이지당 하이라이트 등록 상한 (초과분 폐기, 기존 등록 우선) — 오버레이 path
+  /// 조립 O(페이지 내 항목 수)의 결정적 유계.
+  package static let maxHighlightsPerPage = 4_096
 }
 
 /// 플랫폼 페이스트보드 어댑터 (복사 한 곳).

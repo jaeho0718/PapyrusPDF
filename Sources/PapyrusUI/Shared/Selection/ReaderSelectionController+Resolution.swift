@@ -11,6 +11,9 @@ extension ReaderSelectionController {
   /// 스토어에 페이지 콘텐츠가 도착했다 (`store.onContentReady` 배선 대상).
   /// - Parameter pageIndex: 도착한 페이지 인덱스.
   func contentArrived(_ pageIndex: Int) {
+    // 상태와 무관하게 항상 발화한다 — idle 조기 return에 걸려도 지속 하이라이트만
+    // 있는 페이지(선택 없음)가 재반영에서 누락되지 않아야 한다.
+    self.onPageContentReady?(pageIndex)
     switch self.state {
     case .idle: // T7
       return

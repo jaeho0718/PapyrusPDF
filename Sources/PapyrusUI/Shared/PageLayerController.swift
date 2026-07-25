@@ -52,6 +52,9 @@ package final class PageLayerController {
   /// 지연 생성 선택 오버레이 (선택 미사용 페이지는 비용 0).
   private var selectionOverlay: SelectionOverlay?
 
+  /// 지연 생성 지속 하이라이트 오버레이 (하이라이트 미사용 페이지는 비용 0).
+  private var persistentHighlightOverlay: PersistentHighlightOverlay?
+
   /// 컨트롤러를 만든다.
   package init() {
     let containerLayer = CALayer()
@@ -188,11 +191,32 @@ package final class PageLayerController {
     self.selectionOverlay?.clear()
   }
 
-  /// 버킷 전환 시 오버레이(검색+선택) 선명도를 일괄 갱신한다 (미생성 오버레이는 no-op).
+  /// 지속 하이라이트 그룹을 표시한다 (없던 오버레이는 지연 생성 — 빈 배열이면
+  /// ``clearPersistentHighlights()``와 동일).
+  /// - Parameter groups: 표시할 지속 하이라이트 그룹.
+  package func setPersistentHighlights(_ groups: [PersistentHighlightGroup]) {
+    let overlay = self.persistentHighlightOverlay ?? {
+      let created = PersistentHighlightOverlay(parent: self.overlayLayer)
+      self.persistentHighlightOverlay = created
+      return created
+    }()
+    overlay.apply(groups)
+  }
+
+  /// 지속 하이라이트를 지운다 (오버레이 미생성이면 no-op).
+  package func clearPersistentHighlights() {
+    self.persistentHighlightOverlay?.clear()
+  }
+
+  /// 버킷 전환 시 오버레이(지속 하이라이트+검색+선택) 선명도를 일괄 갱신한다
+  /// (미생성 오버레이는 no-op).
   /// - Parameters:
   ///   - screenScale: 화면 배율(픽셀 밀도).
   ///   - bucketScale: 현재 스케일 버킷 배율.
   package func updateOverlayContentsScale(screenScale: CGFloat, bucketScale: CGFloat) {
+    self.persistentHighlightOverlay?.updateContentsScale(
+      screenScale: screenScale, bucketScale: bucketScale
+    )
     self.highlightOverlay?.updateContentsScale(screenScale: screenScale, bucketScale: bucketScale)
     self.selectionOverlay?.updateContentsScale(screenScale: screenScale, bucketScale: bucketScale)
   }
@@ -215,6 +239,7 @@ package final class PageLayerController {
     // 재활용 풀 경유 시 이전 페이지 하이라이트·선택 잔류 방지 (필수 불변식).
     self.clearSearchHighlights()
     self.clearSelection()
+    self.clearPersistentHighlights()
   }
 
   /// 새 타일 frame에 완전히 포함되는 스테일 레이어를 제거한다 (§4.5 규칙 1, 여유 ε).
