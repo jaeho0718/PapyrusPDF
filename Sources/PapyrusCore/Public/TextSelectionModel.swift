@@ -89,6 +89,7 @@ extension TextSelection {
   /// 디코딩 후 지정 이니셜라이저를 경유해 `start <= end` 불변식을 강제합니다
   /// (역순으로 저장된 JSON도 정규화됩니다).
   /// - Parameter decoder: 디코더입니다.
+  /// - Throws: `start`·`end` 키가 없거나 값의 형식이 맞지 않으면 `DecodingError`를 던집니다.
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let start = try container.decode(TextPosition.self, forKey: .start)

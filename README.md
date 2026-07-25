@@ -17,7 +17,12 @@ Papyrus는 수천 페이지급 대용량 PDF를 macOS·iPadOS·iOS에서 다루�
 크래시나 행 없이 열리도록 손상 문서를 상시 퍼즈 테스트로 검증하며, 복구가
 개입한 경우에는 실패 대신 경고로 알립니다.
 
-v1 표면은 안정 상태입니다. 설치, 사용법, 내부 설계는 아래 절에서 이어집니다.
+뷰어는 네이티브와 같은 텍스트 드래그 선택·복사를 제공하고, 선택 메뉴는 항목
+배열로 커스터마이징합니다. 개발자가 정의한 영역을 탭 선택 대상으로 등록할 수
+있고, 스캔 PDF에는 OCR 결과를 텍스트 공급원으로 주입해 선택·검색이 그 위에서
+동작하며, `Codable` 하이라이트로 형광펜 상태를 앱 저장소에 보존할 수 있습니다.
+
+0.2.0 표면은 안정 상태입니다. 릴리스 이력은 GitHub Releases를 참고하세요.
 
 ## Papyrus 사용 시작하기
 
@@ -41,8 +46,10 @@ iOS 18+ / iPadOS 18+ / macOS 15+, Swift 6(strict concurrency)을 요구합니다
 설치부터 문서 열기, 메타데이터·텍스트·검색, 뷰어 표시까지 이어지는 전체 흐름은
 [GettingStarted]를, 뷰어를 더 깊이 제어하는 방법(적재 상태 관찰, 검색
 하이라이트·매치 탐색, 목차 이동, 위치 저장·복원)은 [ViewerGuide]를, 내부 모듈
-구성과 동시성·손상 내성 설계는 [Architecture]를 참고하세요. v1 지원 범위와 성능
-특성은 [SupportedFeatures]에 정리되어 있습니다. 이 문서들은 DocC 카탈로그로
+구성과 동시성·손상 내성 설계는 [Architecture]를 참고하세요. 텍스트 선택·선택
+메뉴·영역은 [SelectingText]를, 하이라이트 보존은 [PersistentHighlights]를, 스캔
+PDF의 OCR 연결은 [ConnectingOCR]를 참고하세요. 현재 지원 범위와 성능 특성은
+[SupportedFeatures]에 정리되어 있습니다. 이 문서들은 DocC 카탈로그로
 작성되어 있으며, 저장소를 체크아웃한 뒤 아래 커맨드로 로컬에서 생성해 읽을 수
 있습니다.
 
@@ -82,6 +89,9 @@ Papyrus는 [MIT 라이선스][LICENSE]를 따릅니다.
 
 [GettingStarted]: Sources/Papyrus/Papyrus.docc/GettingStarted.md
 [ViewerGuide]: Sources/Papyrus/Papyrus.docc/ViewerGuide.md
+[SelectingText]: Sources/Papyrus/Papyrus.docc/SelectingText.md
+[PersistentHighlights]: Sources/Papyrus/Papyrus.docc/PersistentHighlights.md
+[ConnectingOCR]: Sources/Papyrus/Papyrus.docc/ConnectingOCR.md
 [Architecture]: Sources/Papyrus/Papyrus.docc/Architecture.md
 [SupportedFeatures]: Sources/Papyrus/Papyrus.docc/SupportedFeatures.md
 [Docs/ARCHITECTURE.md]: Docs/ARCHITECTURE.md

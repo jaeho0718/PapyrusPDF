@@ -69,7 +69,7 @@ extension PapyrusDocument {
   /// - Parameters:
   ///   - query: 검색어입니다.
   ///   - options: 검색 옵션입니다 (기본값 — 대소문자·발음 부호 무시).
-  /// - Throws(스트림 종료 에러): ``PapyrusError`` (`Error`로 소거 — AsyncThrowingStream
+  /// - Throws: 스트림 종료 에러입니다. ``PapyrusError`` (`Error`로 소거 — AsyncThrowingStream
   ///   실패 타입 제약. 실제 타입은 항상 `PapyrusError`임을 문서화합니다).
   /// - Returns: 매치를 순서대로 방출하는 비동기 스트림입니다.
   public func search(
@@ -88,7 +88,7 @@ extension PapyrusDocument {
   ///   - query: 검색어입니다.
   ///   - options: 검색 옵션입니다 (기본값 — 대소문자·발음 부호 무시).
   ///   - provider: 텍스트 콘텐츠 공급원입니다.
-  /// - Throws(스트림 종료 에러): ``PapyrusError`` (`Error`로 소거 — AsyncThrowingStream
+  /// - Throws: 스트림 종료 에러입니다. ``PapyrusError`` (`Error`로 소거 — AsyncThrowingStream
   ///   실패 타입 제약. 실제 타입은 항상 `PapyrusError`임을 문서화합니다).
   /// - Returns: 매치를 순서대로 방출하는 비동기 스트림입니다.
   public func search(

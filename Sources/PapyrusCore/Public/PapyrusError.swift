@@ -8,7 +8,7 @@ public enum PapyrusError: Error, Sendable, Equatable {
   /// 파일 열기/매핑 I/O 실패입니다. `message`는 진단용 설명입니다.
   case ioError(message: String)
 
-  /// 암호화 문서입니다 — v1은 지원하지 않습니다. `filterName`은 /Encrypt /Filter 진단값입니다.
+  /// 암호화 문서입니다 — 아직 지원하지 않습니다. `filterName`은 /Encrypt /Filter 진단값입니다.
   case encryptedDocument(filterName: String?)
 
   /// 구조 손상으로 복구 불능이거나, 필수 구조(페이지 트리 루트 등) 해소가 불가능합니다.

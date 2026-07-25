@@ -19,6 +19,13 @@ SwiftUI 퍼사드와 가상화 스크롤 뷰어.
 - ``ReaderSearchState``
 - ``ReaderPosition``
 
+### 텍스트 선택
+
+- ``PapyrusReaderModel/selection``
+- ``PapyrusReaderModel/select(_:)``
+- ``PapyrusReaderModel/clearSelection()``
+- ``PapyrusReaderModel/selectedString()``
+
 ### 선택 메뉴
 
 - ``SelectionContext``
@@ -30,6 +37,10 @@ SwiftUI 퍼사드와 가상화 스크롤 뷰어.
 ### 선택 가능 영역
 
 - ``SelectableRegion``
+- ``PapyrusReaderModel/setSelectableRegions(_:forPage:)``
+- ``PapyrusReaderModel/selectableRegions(forPage:)``
+- ``PapyrusReaderModel/clearSelectableRegions()``
+- ``PapyrusReaderModel/selectedRegion``
 
 ### 지속 하이라이트
 

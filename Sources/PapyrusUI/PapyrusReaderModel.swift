@@ -146,7 +146,7 @@ public final class PapyrusReaderModel {
     core.goToPage(index, animated: animated)
   }
 
-  /// 목차 목적지로 이동합니다 (`OutlineDestination.pageIndex` — v1 목적지는 페이지 단위).
+  /// 목차 목적지로 이동합니다 (`OutlineDestination.pageIndex` — 현재는 페이지 단위 목적지입니다).
   ///
   /// `document.outline`에서 얻은 항목을 사용자가 목차 사이드바에서 선택했을 때 그
   /// `destination`을 그대로 넘기면 됩니다.

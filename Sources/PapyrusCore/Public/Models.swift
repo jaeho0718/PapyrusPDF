@@ -117,7 +117,7 @@ public struct PageInfo: Sendable, Equatable {
   }
 }
 
-/// 목차 항목 목적지입니다. v1은 페이지 인덱스만 담습니다 (좌표·배율은 추후 필드 추가 — 가정 5).
+/// 목차 항목 목적지입니다. 현재는 페이지 인덱스만 담습니다. 좌표·배율 정보는 추후 확장 예정입니다.
 public struct OutlineDestination: Sendable, Equatable {
   /// 이동 대상 페이지 인덱스입니다 (0 기반, 항상 `0..<pageCount` 안).
   public let pageIndex: Int

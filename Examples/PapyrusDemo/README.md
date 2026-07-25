@@ -56,7 +56,8 @@ xcodebuild -project PapyrusDemo.xcodeproj -scheme PapyrusDemo_iOS \
 | `DocumentLoader.swift` | `@Observable`: `fileImporter` URL/합성 바이트 → `PapyrusDocument.open`, 경고·에러 상태 |
 | `OutlineSidebar.swift` | `OutlineItem` 트리 → `List`, 탭 시 `model.go(to:)` |
 | `ReaderToolbar.swift` | 페이지 표시("n / N")·페이지 이동 입력·줌 ±·위치 저장/복원(UserDefaults의 `ReaderPosition` JSON)·하이라이트 저장/불러오기/전체 제거(UserDefaults의 `[Highlight]` JSON, M14) |
-| `SyntheticPDF.swift` | `CGContext(consumer:mediaBox:_:)` 기반 N페이지 생성기 — 페이지 번호 대형 텍스트 + 100pt 격자(타일 경계 눈검증 겸용) |
+| `SyntheticPDF.swift` | `CGContext(consumer:mediaBox:_:)` 기반 N페이지 생성기 — 페이지 번호 대형 텍스트 + 100pt 격자(타일 경계 눈검증 겸용). `makeScanned(pageCount:)`는 텍스트 연산자 없는 이미지 전용 페이지를 만들어 OCR 경로를 강제한다 |
+| `VisionTextProvider.swift` | Vision `RecognizeTextRequest`를 `PageTextProvider`로 감싼 actor — 스캔 문서에서 선택·검색이 OCR 텍스트 위에서 동작하게 한다 |
 
 `SyntheticPDF`는 `PapyrusTestSupport`(제품 비노출 타겟)를 쓰지 않습니다 — CG의 PDF 그리기
 API에 위임하는 수십 줄짜리 생성기라 데모 앱 자체에 둡니다(M6 설계 가정 10).
@@ -105,3 +106,30 @@ API에 위임하는 수십 줄짜리 생성기라 데모 앱 자체에 둡니다
 - [ ] 같은 문서를 다시 열고 **Highlights → Load Highlights** → 저장해 둔 하이라이트가
       그대로 복원된다(`Codable` JSON 왕복).
 - [ ] **Highlights → Clear Highlights** → 현재 문서의 모든 하이라이트가 제거된다.
+
+## 0.2.0 통합 시연 체크리스트 (양 플랫폼)
+
+텍스트 문서(Generate 5,000-Page Document 또는 실제 PDF)에서:
+- [ ] 드래그로 텍스트 선택(iOS: 롱프레스 후 핸들, macOS: 드래그) → 선택 채움 표시.
+- [ ] 페이지 경계를 넘겨 선택 → 두 페이지 모두에 채움, 복사 문자열에 개행 결합.
+- [ ] macOS 더블클릭=단어, 트리플클릭=라인 선택. ⌘C 복사 → 페이스트보드 확인.
+- [ ] 선택 메뉴에 커스텀 항목 4개 + Copy 표시. "Search Selection" → 검색 하이라이트와
+      매치 카운트 갱신. "Show Length" → 선택 문자열 알림.
+- [ ] 선택 → "Highlight (Yellow)" → 즉시 하이라이트 + 선택 해제. 다른 구간 Green —
+      두 색 동시 표시.
+- [ ] Highlights → Save → 문서 교체(하이라이트 소거 확인) → 같은 문서 재열기 →
+      Load → 복원. Clear → 전량 제거.
+- [ ] 페이지 0 좌하단 데모 영역 탭 → 강조 + "Show Region Info" 메뉴 → metadata 캡션
+      알림. 영역 선택 중 텍스트 드래그 → 영역 해제(상호 배타).
+- [ ] 검색·선택·하이라이트가 공존하는 페이지에서 겹침 시각 확인(선택이 최상위).
+
+스캔 문서(Generate Scanned Document)에서:
+- [ ] 열기 직후 페이지가 이미지로 표시된다 (내장 텍스트 없음).
+- [ ] 드래그 선택이 OCR 텍스트 위에서 동작하고 복사 문자열이 화면 텍스트와 일치.
+- [ ] 검색("page" 등) → OCR 텍스트에서 매치·하이라이트·이동 동작.
+- [ ] 특정 페이지에만 있는 문구 검색 → 그 페이지만 매치.
+- [ ] 선택 → Highlight → 표시·저장/복원 동작 (OCR 좌표 위 하이라이트).
+
+배치 변형(선택 메뉴 브리지 엣지):
+- [ ] 리더를 시트(.sheet) 안에 띄워도 선택 메뉴가 올바른 위치에 표시된다.
+      (데모에 임시 코드 불요 — Xcode 프리뷰나 간단한 시트 토글로 확인하고 결과만 기록.)

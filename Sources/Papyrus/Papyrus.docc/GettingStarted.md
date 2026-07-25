@@ -68,7 +68,7 @@ do {
 } catch PapyrusError.notAPDF {
   print("PDF 파일이 아닙니다.")
 } catch PapyrusError.encryptedDocument(let filterName) {
-  print("암호화된 문서입니다 (필터: \(filterName ?? "unknown")). v1은 지원하지 않습니다.")
+  print("암호화된 문서입니다 (필터: \(filterName ?? "unknown")). 아직 지원하지 않습니다.")
 } catch PapyrusError.damagedDocument {
   print("복구할 수 없을 정도로 손상된 문서입니다.")
 } catch {
@@ -138,4 +138,6 @@ struct ReaderScreen: View {
 
 뷰어의 적재 상태를 지켜보거나, 검색 결과를 뷰어 안에서 하이라이트·이동하거나,
 목차 항목을 선택해 이동하거나, 사용자가 보던 위치를 저장했다가 다음에 이어서 열고
-싶다면 <doc:ViewerGuide>를 이어서 읽으세요.
+싶다면 <doc:ViewerGuide>를 이어서 읽으세요. 텍스트 선택·선택 메뉴는
+<doc:SelectingText>, 지속 하이라이트는 <doc:PersistentHighlights>, 스캔 문서의
+OCR 연결은 <doc:ConnectingOCR>을 참고하세요.
