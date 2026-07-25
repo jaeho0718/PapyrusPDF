@@ -84,6 +84,29 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 선택 변경 통지 (모델이 구독).
   package var onSelectionChange: ((TextSelection?) -> Void)?
 
+  /// 공개 선택 메뉴 빌더 (`View.papyrusSelectionMenu(_:)` → Environment 전파 종점).
+  ///
+  /// 환경 변화 → body 재평가 → 대입으로 반영된다. 표시 중인 메뉴에는 소급 적용하지
+  /// 않는다 — 다음 선택 확정부터 새 빌더가 쓰인다.
+  package var selectionMenuBuilder: SelectionMenuItemsBuilder?
+
+  /// 부착된 호스트의 메뉴 표시 표면 (`attach(to:)`가 캐스팅해 채우고 `detach()`가 비운다).
+  ///
+  /// `ReaderCore+Selection.swift`도 참조하므로 모듈 스코프로 둔다 (M5 관례).
+  weak var menuPresenting: (any ReaderMenuPresenting)?
+
+  /// 확정 선택의 해소 문자열 프리페치 캐시 (선택 값 → 문자열). macOS 동기 pull 표면의
+  /// 소비용 — 선택 변경 시 무효화된다 (§4.5).
+  ///
+  /// `ReaderCore+Selection.swift`도 참조하므로 모듈 스코프로 둔다.
+  var menuTextCache: (selection: TextSelection, text: String)?
+
+  /// 메뉴 문자열 프리페치 진행 중 태스크 (선택 변경마다 취소·재시작).
+  var menuTextPrefetchTask: Task<Void, Never>?
+
+  /// 확정 선택 메뉴 표시(iOS push) 진행 중 태스크 (새 요청·dismiss 시 직전 것을 취소).
+  var menuPresentationTask: Task<Void, Never>?
+
   /// `documentUnavailable` 래치 — 이후 페치 태스크 스폰을 중단한다.
   var renderingUnavailable = false
 
@@ -118,15 +141,21 @@ package final class ReaderCore: ReaderHostEventSink {
     }
     selectionController?.onSelectionChange = { [weak self] selection in
       self?.onSelectionChange?(selection)
+      self?.updateMenuTextCache(for: selection)
     }
     selectionController?.onOverlayInvalidate = { [weak self] pageIndex in
       self?.applySelection(toPage: pageIndex)
     }
     selectionController?.onMenuRequest = { [weak self] anchorPage in
-      self?.presentDefaultMenu(anchorPage: anchorPage)
+      self?.menuPresentationTask?.cancel()
+      self?.menuPresentationTask = Task { [weak self] in
+        await self?.presentResolvedMenu(anchorPage: anchorPage)
+      }
     }
     selectionController?.onMenuDismiss = { [weak self] in
-      (self?.host as? ReaderMenuPresenting)?.dismissSelectionMenu()
+      self?.menuPresentationTask?.cancel()
+      self?.menuPresentationTask = nil
+      self?.menuPresenting?.dismissSelectionMenu()
     }
   }
 
@@ -134,6 +163,7 @@ package final class ReaderCore: ReaderHostEventSink {
   /// - Parameter host: 부착할 스크롤 호스트.
   package func attach(to host: any ReaderScrollHost) {
     self.host = host
+    self.menuPresenting = host as? ReaderMenuPresenting
     host.setContentSize(self.layout.contentSize)
     let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
     host.setZoomLimits(minimum: fit, maximum: ReaderLayoutMetrics.maxZoomScale)
@@ -157,6 +187,7 @@ package final class ReaderCore: ReaderHostEventSink {
     }
     self.controllers.removeAll()
     self.host = nil
+    self.menuPresenting = nil
 
     self.searchCoordinator?.cancel()
     self.searchHighlights.removeAll()
@@ -164,6 +195,11 @@ package final class ReaderCore: ReaderHostEventSink {
     self.currentMatchFlatIndex = nil
 
     self.selectionController?.teardown()
+    self.menuTextPrefetchTask?.cancel()
+    self.menuTextPrefetchTask = nil
+    self.menuPresentationTask?.cancel()
+    self.menuPresentationTask = nil
+    self.menuTextCache = nil
   }
 
   // MARK: - ReaderHostEventSink

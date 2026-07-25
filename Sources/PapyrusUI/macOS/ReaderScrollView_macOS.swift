@@ -217,20 +217,26 @@ struct ReaderScrollViewRepresentable: NSViewRepresentable {
   /// 부착할 코어.
   let core: ReaderCore
 
+  /// `View.papyrusSelectionMenu(_:)`로 지정된 선택 메뉴 빌더 (미지정이면 `nil`).
+  let menuBuilder: SelectionMenuItemsBuilder?
+
   /// 호스트 뷰를 만들고 코어를 부착한다.
   /// - Parameter context: 표현 컨텍스트.
   /// - Returns: 생성된 호스트 뷰.
   func makeNSView(context: Context) -> ReaderScrollHostView {
     let view = ReaderScrollHostView()
     view.eventSink = self.core
+    self.core.selectionMenuBuilder = self.menuBuilder
     self.core.attach(to: view)
     return view
   }
 
-  /// 갱신할 상태가 없다 (코어가 직접 레이어를 관리한다).
+  /// 선택 메뉴 빌더를 코어에 재대입한다 (환경 변화 반영 — 재조립 없음).
   /// - Parameters:
-  ///   - nsView: 갱신 대상 호스트 뷰.
+  ///   - nsView: 갱신 대상 호스트 뷰 (미사용 — 코어가 레이어를 직접 관리한다).
   ///   - context: 표현 컨텍스트.
-  func updateNSView(_ nsView: ReaderScrollHostView, context: Context) {}
+  func updateNSView(_ nsView: ReaderScrollHostView, context: Context) {
+    self.core.selectionMenuBuilder = self.menuBuilder
+  }
 }
 #endif

@@ -23,7 +23,7 @@ final class MenuActionBridge: NSObject {
   }
 }
 
-/// `[ResolvedMenuItem]` → `NSMenu` 변환 헬퍼 (향후 공개 메뉴 파이프라인이 재사용할 표면).
+/// `[ResolvedMenuItem]` → `NSMenu` 변환 헬퍼 (공개 메뉴 파이프라인의 해소 산출물을 소비한다).
 enum MacMenuBuilder {
   /// 메뉴와, 항목 target을 붙잡아 둘 브리지 목록을 함께 만든다.
   ///

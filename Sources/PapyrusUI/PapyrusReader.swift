@@ -21,6 +21,9 @@ public struct PapyrusReader: View {
   /// 뷰어 부착 시점의 화면 배율 (가정 6 — SwiftUI 환경값이 플랫폼을 가린다).
   @Environment(\.displayScale) private var displayScale
 
+  /// `View.papyrusSelectionMenu(_:)`로 지정된 선택 메뉴 빌더 (미지정이면 `nil`).
+  @Environment(\.papyrusSelectionMenu) private var selectionMenuBuilder
+
   /// 뷰어를 만듭니다.
   /// - Parameters:
   ///   - document: 표시할 문서입니다 (열린 상태).
@@ -44,7 +47,7 @@ public struct PapyrusReader: View {
         )
       case .ready:
         if let core = self.session.core {
-          ReaderScrollViewRepresentable(core: core)
+          ReaderScrollViewRepresentable(core: core, menuBuilder: self.selectionMenuBuilder)
         }
       }
     }

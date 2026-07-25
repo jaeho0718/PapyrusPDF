@@ -97,11 +97,14 @@ extension ReaderCore: ReaderSelectionEventSink {
     self.selectionController?.selection != nil
   }
 
-  /// 우클릭 지점의 컨텍스트 메뉴 항목 (선택 밖·선택 없음이면 빈 배열).
+  /// 우클릭 지점의 컨텍스트 메뉴 항목 (선택 밖·선택 없음이면 빈 배열) — macOS pull 표면.
+  ///
+  /// 해소 문자열은 프리페치 캐시(§4.5)에서 동기로 얻는다: 캐시 적중 시 그 값, 미스면
+  /// 캐시 전용 재조립 폴백, 그래도 실패하면 빈 문자열로 진행한다.
   /// - Parameter point: 콘텐츠 공간의 우클릭 점.
   /// - Returns: 해소된 메뉴 항목 목록.
   package func hostContextMenuItems(atContentPoint point: CGPoint) -> [ResolvedMenuItem] {
-    guard let selectionController, selectionController.selection != nil,
+    guard let selectionController, let selection = selectionController.selection,
       let pagePoint = self.pagePoint(forContentPoint: point)
     else {
       return []
@@ -110,7 +113,11 @@ extension ReaderCore: ReaderSelectionEventSink {
     guard quads.contains(where: { $0.boundingRect.contains(pagePoint.point) }) else {
       return []
     }
-    return [self.defaultCopyItem()]
+    let text = self.cachedMenuText(for: selection)
+    let context = SelectionContext.text(
+      TextSelectionContext(selection: selection, selectedText: text)
+    )
+    return SelectionMenuResolver.resolve(context: context, builder: self.selectionMenuBuilder)
   }
 }
 
@@ -134,40 +141,94 @@ extension ReaderCore {
     }
   }
 
-  /// 내부 기본 메뉴 (복사 1개 — 향후 공개 메뉴 빌더가 대체할 자리).
-  /// - Returns: 복사 메뉴 항목.
-  func defaultCopyItem() -> ResolvedMenuItem {
-    ResolvedMenuItem(title: "Copy", systemImage: "doc.on.doc") { [weak self] in
-      guard let self else {
-        return
-      }
-      Task {
-        await self.copySelectionToPasteboard()
-      }
-    }
-  }
-
-  /// 확정 선택 주변에 내부 기본 메뉴를 표시한다.
+  /// 확정 선택 주변에 해소된 메뉴를 표시한다 (iOS push 표면) — 문자열 해소 중 선택이
+  /// 바뀌면(드래그 재시작·해제·프로그램 select) 표시를 중단한다(스테일 메뉴 방지).
   /// - Parameter anchorPage: 메뉴 앵커 기준 페이지.
-  func presentDefaultMenu(anchorPage: Int) {
-    guard let selectionController,
+  func presentResolvedMenu(anchorPage: Int) async {
+    guard let selectionController, let selection = selectionController.selection else {
+      return
+    }
+    let text = await self.menuText(for: selection)
+    guard selectionController.selection == selection else {
+      return
+    }
+    let context = SelectionContext.text(
+      TextSelectionContext(selection: selection, selectedText: text)
+    )
+    let items = SelectionMenuResolver.resolve(
+      context: context, builder: self.selectionMenuBuilder
+    )
+    guard !items.isEmpty,
       let anchorRect = selectionController.menuAnchorRect(forPage: anchorPage),
       let frame = self.layout.pageFrame(at: anchorPage)
     else {
       return
     }
-    let contentRect = anchorRect.offsetBy(dx: frame.minX, dy: frame.minY)
-    (self.host as? ReaderMenuPresenting)?.presentSelectionMenu(
-      [self.defaultCopyItem()], around: contentRect
+    self.menuPresenting?.presentSelectionMenu(
+      items, around: anchorRect.offsetBy(dx: frame.minX, dy: frame.minY)
     )
   }
 
   /// 현재 선택 문자열을 페이스트보드에 쓴다 (선택 없으면 no-op).
+  ///
+  /// ⌘C(`hostCopyCommand`)의 진실 원천 — 메뉴 컨텍스트가 없어 매번 전량 재해소한다
+  /// (프리페치 캐시를 거치지 않는다).
   func copySelectionToPasteboard() async {
     guard let text = await self.selectedString() else {
       return
     }
     PlatformPasteboard.setString(text)
+  }
+
+  // MARK: - 메뉴 문자열 프리페치 캐시 (§4.5)
+
+  /// 확정 선택 변경에 맞춰 메뉴 문자열 프리페치 캐시를 갱신한다.
+  ///
+  /// macOS 동기 pull 표면(`hostContextMenuItems`)이 표시 시점에 `await`할 수 없어,
+  /// 선택 확정 시점에 미리 조립해 둔다. 선택이 해제되면 진행 중 태스크를 취소하고
+  /// 캐시를 비운다.
+  /// - Parameter selection: 새로 확정된 선택 (해제되면 `nil`).
+  func updateMenuTextCache(for selection: TextSelection?) {
+    self.menuTextPrefetchTask?.cancel()
+    guard let selection else {
+      self.menuTextPrefetchTask = nil
+      self.menuTextCache = nil
+      return
+    }
+    guard let selectionController else {
+      return
+    }
+    self.menuTextPrefetchTask = Task { [weak self] in
+      let text = await selectionController.selectedString()
+      guard let self, selectionController.selection == selection else {
+        return
+      }
+      self.menuTextCache = (selection, text ?? "")
+    }
+  }
+
+  /// iOS push 경로용 문자열 해소 — 캐시 적중 시 즉시 반환, 미스면 직접 재해소한다.
+  /// - Parameter selection: 대상 선택.
+  /// - Returns: 해소된 선택 문자열.
+  func menuText(for selection: TextSelection) async -> String {
+    if let cache = self.menuTextCache, cache.selection == selection {
+      return cache.text
+    }
+    return await self.selectionController?.selectedString() ?? ""
+  }
+
+  /// macOS pull 경로용 동기 문자열 해소.
+  ///
+  /// ① 캐시 적중 → 그 값. ② 미스(프리페치 미완) → 캐시 전용 재조립 폴백
+  /// (`selectedStringFromCache()`). ③ 그래도 실패 → 빈 문자열 (메뉴는 뜨되
+  /// `selectedText`가 비어 있을 수 있다 — §4.5 문서화된 동작).
+  /// - Parameter selection: 대상 선택.
+  /// - Returns: 해소된 선택 문자열 (실패해도 빈 문자열).
+  func cachedMenuText(for selection: TextSelection) -> String {
+    if let cache = self.menuTextCache, cache.selection == selection {
+      return cache.text
+    }
+    return self.selectionController?.selectedStringFromCache() ?? ""
   }
 
   // MARK: - 모델 위임
