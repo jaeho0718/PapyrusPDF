@@ -31,6 +31,8 @@ PDF 파일 구조를 순수 Swift로 파싱하는 코어.
 
 - ``PageTextContent``
 - ``TextRun``
+- ``PageTextProvider``
+- ``DocumentTextProvider``
 
 ### 검색
 

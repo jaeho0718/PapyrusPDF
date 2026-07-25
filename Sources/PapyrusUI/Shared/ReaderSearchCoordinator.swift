@@ -21,8 +21,11 @@ package final class ReaderSearchCoordinator {
   /// 이벤트 수신부 (`ReaderCore`가 설정).
   package var onEvent: ((SearchEvent) -> Void)?
 
-  /// 검색 대상 문서.
+  /// 검색 대상 문서 (페이지 수·표시 변환의 원천 — 텍스트는 provider 소관).
   private let document: PapyrusDocument
+
+  /// 검색 텍스트 공급원 (세션 조립 시 해소된 단일 인스턴스).
+  private let provider: any PageTextProvider
 
   /// 진행 중 소비 태스크.
   private var task: Task<Void, Never>?
@@ -34,9 +37,13 @@ package final class ReaderSearchCoordinator {
   private var transformCache: [Int: CGAffineTransform] = [:]
 
   /// 코디네이터를 만든다.
-  /// - Parameter document: 검색 대상 문서.
-  package init(document: PapyrusDocument) {
+  /// - Parameters:
+  ///   - document: 검색 대상 문서 (페이지 수·표시 변환 공급).
+  ///   - provider: 검색할 텍스트 공급원 (기본 공급원이면 호출자가
+  ///     `DocumentTextProvider`를 만들어 전달한다 — 폴백 해소는 조립 1곳 원칙).
+  package init(document: PapyrusDocument, provider: any PageTextProvider) {
     self.document = document
+    self.provider = provider
   }
 
   /// 검색을 시작한다. 진행 중 검색은 취소·대체된다.
@@ -50,7 +57,7 @@ package final class ReaderSearchCoordinator {
     self.transformCache.removeAll()
     self.onEvent?(.began(query: query))
 
-    let stream = self.document.search(query, options: options)
+    let stream = self.document.search(query, options: options, provider: self.provider)
     self.task = Task { [weak self] in
       await self?.consume(stream: stream, generation: generation)
     }

@@ -9,6 +9,10 @@ package enum RenderingLimits {
   /// 프리뷰 이미지 최장변 픽셀 수 (pixelScale 무관 고정 — 저해상도 밑그림 용도).
   package static let previewMaxPixelDimension = 512
 
+  /// `PageImageRenderer` 전체 페이지 이미지의 최장변 픽셀 상한 (병적 cropBox·과대 배율
+  /// 가드 — A4 scale 3이 2,526px로 여유롭게 통과하고, 4K 초과는 OCR 이득이 없는 구간).
+  package static let fullPageImageMaxPixelDimension = 4_096
+
   /// 스케일 버킷 지수 하한 (2^(-8/2) = 1/16 배).
   package static let minScaleExponent = -8
 
