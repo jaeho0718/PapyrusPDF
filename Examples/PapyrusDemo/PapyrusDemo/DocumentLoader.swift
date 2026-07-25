@@ -24,6 +24,10 @@ final class DocumentLoader {
   /// 현재 문서에 대응하는 뷰어 모델 (문서 교체 시 새로 만들어진다).
   private(set) var readerModel = PapyrusReaderModel()
 
+  /// 현재 문서에 주입된 텍스트 공급원 (스캔 문서 데모용 — 일반 문서를 열면 `nil`로
+  /// 돌아온다).
+  private(set) var textProvider: (any PageTextProvider)?
+
   /// 문서의 목차 (부재·미열림이면 빈 배열).
   private(set) var outline: [OutlineItem] = []
 
@@ -63,12 +67,25 @@ final class DocumentLoader {
     }
   }
 
+  /// 스캔 PDF(내장 텍스트 없음)를 합성해 열고, Vision OCR을 텍스트 공급원으로 주입한다.
+  func openScannedDemo() async {
+    let data = SyntheticPDF.makeScanned(pageCount: 12)
+    await self.load(
+      displayName: "Scanned (OCR, 12 pages)",
+      provider: { VisionTextProvider(document: $0) },
+      open: { try await PapyrusDocument.open(data: data) }
+    )
+  }
+
   /// 공통 적재 절차: 문서 열기 → 목차 조회 → 상태 반영. 실패는 `errorMessage`로 통지한다.
   /// - Parameters:
   ///   - displayName: 성공 시 표시할 이름.
+  ///   - provider: 문서로부터 텍스트 공급원을 만드는 클로저 (기본 `nil` — 내장 추출을 그대로 씀).
   ///   - open: 문서를 여는 클로저.
   private func load(
-    displayName: String, open: () async throws -> PapyrusDocument
+    displayName: String,
+    provider: ((PapyrusDocument) -> (any PageTextProvider)?)? = nil,
+    open: () async throws -> PapyrusDocument
   ) async {
     self.isLoading = true
     defer {
@@ -77,6 +94,7 @@ final class DocumentLoader {
     do {
       let document = try await open()
       self.document = document
+      self.textProvider = provider?(document)
       self.openWarnings = document.openWarnings
       self.outline = try await document.outline
       self.readerModel = PapyrusReaderModel()

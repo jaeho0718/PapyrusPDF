@@ -6,7 +6,8 @@ PDFKit에 의존하지 않는 하이브리드 구조입니다 — 파일 구조(
 메타데이터, 목차, 페이지별 텍스트)는 순수 Swift로 직접 파싱하고, 픽셀 래스터화만
 Core Graphics에 위임합니다. `import Papyrus` 하나로 파싱 코어(`PapyrusCore`), 페이지
 이미지 렌더링(`PapyrusRendering`), SwiftUI 뷰어(`PapyrusUI`)의 공개 API 전체를 사용할
-수 있습니다.
+수 있습니다. 뷰어는 텍스트 드래그 선택·복사, 선택 메뉴 커스터마이징, 개발자 정의
+선택 가능 영역, 지속 하이라이트도 함께 제공합니다.
 
 빠르게 시작하려면 <doc:GettingStarted>를 참고하세요. 각 모듈의 상세 API는
 `PapyrusCore`·`PapyrusRendering`·`PapyrusUI` 타겟 문서에 있고, 내부 구조와 설계 원칙은
@@ -25,6 +26,8 @@ swift package generate-documentation --enable-experimental-combined-documentatio
 
 - <doc:GettingStarted>
 - <doc:ViewerGuide>
+- <doc:SelectingText>
+- <doc:PersistentHighlights>
 - <doc:ConnectingOCR>
 - <doc:Architecture>
 

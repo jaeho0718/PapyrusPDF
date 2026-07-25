@@ -37,7 +37,7 @@ jobs:
 
       - name: DocC (warnings as errors)
         run: |
-          for T in PapyrusCore PapyrusUI Papyrus; do
+          for T in PapyrusCore PapyrusRendering PapyrusUI Papyrus; do
             swift package generate-documentation --target "$T" --warnings-as-errors
           done
 

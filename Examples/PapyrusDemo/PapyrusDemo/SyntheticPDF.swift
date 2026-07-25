@@ -86,4 +86,108 @@ enum SyntheticPDF {
     CTLineDraw(line, context)
     context.restoreGState()
   }
+
+  /// 페이지별로 결정적으로 달라지는 본문 문장 후보 (OCR 시나리오에서 특정 페이지만
+  /// 매치되는 검색을 확인할 수 있도록 고정 배열 + 페이지 번호 조합을 쓴다).
+  private static let bodySentences = [
+    "Papyrus renders large PDF documents without loading the whole file into memory.",
+    "Optical character recognition connects scanned pages back to searchable text.",
+    "Selection, search, and highlighting all read from the same text provider.",
+    "Vision recognizes text from a rendered page image, one page at a time.",
+    "Every recognized line becomes a text run with a page-space quadrilateral.",
+    "The demo app exercises this pipeline end to end on a synthetic document."
+  ]
+
+  /// 내장 텍스트가 전혀 없는 "스캔 문서" 합성 PDF를 만든다 — 각 페이지를 비트맵으로
+  /// 먼저 그린 뒤 그 이미지를 PDF 페이지에 붙인다 (텍스트 연산자 미포함 → OCR 경로 강제).
+  /// - Parameter pageCount: 생성할 페이지 수 (OCR은 페이지당 비용이 크므로 소수 권장).
+  /// - Returns: 생성된 PDF 바이트.
+  static func makeScanned(pageCount: Int) -> Data {
+    let output = NSMutableData()
+    guard let consumer = CGDataConsumer(data: output) else {
+      preconditionFailure("Failed to create a PDF data consumer.")
+    }
+    let pageWidth: CGFloat = 612
+    let pageHeight: CGFloat = 792
+    var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+    guard let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+      preconditionFailure("Failed to create a PDF context.")
+    }
+
+    let pageSize = CGSize(width: pageWidth, height: pageHeight)
+    for pageIndex in 0..<pageCount {
+      let image = Self.makeScannedPageImage(pageIndex: pageIndex, size: pageSize)
+      pdfContext.beginPDFPage(nil)
+      pdfContext.draw(image, in: CGRect(origin: .zero, size: pageSize))
+      pdfContext.endPDFPage()
+    }
+    pdfContext.closePDF()
+    return output as Data
+  }
+
+  /// 스캔 페이지 하나를 비트맵(2배 해상도)으로 그려 `CGImage`로 반환한다.
+  /// - Parameters:
+  ///   - pageIndex: 페이지 인덱스 (0 기반 — 표시 번호는 +1).
+  ///   - size: 페이지 크기 (pt).
+  /// - Returns: 텍스트가 래스터화된 페이지 이미지.
+  private static func makeScannedPageImage(pageIndex: Int, size: CGSize) -> CGImage {
+    let scale: CGFloat = 2
+    let pixelWidth = Int(size.width * scale)
+    let pixelHeight = Int(size.height * scale)
+    let colorSpace = CGColorSpaceCreateDeviceGray()
+    guard
+      let context = CGContext(
+        data: nil, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8,
+        bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.none.rawValue
+      )
+    else {
+      preconditionFailure("Failed to create a bitmap context for the scanned page.")
+    }
+    context.scaleBy(x: scale, y: scale)
+    context.setFillColor(gray: 1, alpha: 1)
+    context.fill(CGRect(origin: .zero, size: size))
+
+    Self.drawScannedHeader(pageIndex, into: context, size: size)
+    Self.drawScannedBody(pageIndex, into: context, size: size)
+
+    guard let image = context.makeImage() else {
+      preconditionFailure("Failed to rasterize the scanned page.")
+    }
+    return image
+  }
+
+  /// "Scanned page N" 헤더를 페이지 상단에 그린다.
+  private static func drawScannedHeader(_ pageIndex: Int, into context: CGContext, size: CGSize) {
+    let font = CTFontCreateWithName("Helvetica-Bold" as CFString, 22, nil)
+    let attributed = NSAttributedString(
+      string: "Scanned page \(pageIndex + 1)",
+      attributes: [.font: font, .foregroundColor: CGColor(gray: 0.1, alpha: 1)]
+    )
+    let line = CTLineCreateWithAttributedString(attributed)
+    context.saveGState()
+    context.textPosition = CGPoint(x: 56, y: size.height - 80)
+    CTLineDraw(line, context)
+    context.restoreGState()
+  }
+
+  /// 본문 4~6줄을 페이지별로 결정적으로 선택해 그린다 (18pt — Vision이 안정적으로
+  /// 읽는 크기).
+  private static func drawScannedBody(_ pageIndex: Int, into context: CGContext, size: CGSize) {
+    let font = CTFontCreateWithName("Helvetica" as CFString, 18, nil)
+    let lineCount = 4 + pageIndex % 3
+    var y = size.height - 140
+    for line in 0..<lineCount {
+      let sentence = Self.bodySentences[(pageIndex + line) % Self.bodySentences.count]
+      let text = "\(sentence) (page \(pageIndex + 1), line \(line + 1))"
+      let attributed = NSAttributedString(
+        string: text, attributes: [.font: font, .foregroundColor: CGColor(gray: 0.15, alpha: 1)]
+      )
+      let ctLine = CTLineCreateWithAttributedString(attributed)
+      context.saveGState()
+      context.textPosition = CGPoint(x: 56, y: y)
+      CTLineDraw(ctLine, context)
+      context.restoreGState()
+      y -= 32
+    }
+  }
 }

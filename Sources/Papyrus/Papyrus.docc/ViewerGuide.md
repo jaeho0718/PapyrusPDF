@@ -29,6 +29,9 @@ struct ReaderScreen: View {
 아직 문서 적재를 마치기 전에 호출해도 안전합니다. 요청은 보류됐다가 적재가 끝나는 즉시
 한 번 재생됩니다 — "화면을 열자마자 특정 페이지로 이동" 같은 패턴이 그대로 동작합니다.
 
+텍스트 선택·선택 메뉴·지속 하이라이트는 <doc:SelectingText>와
+<doc:PersistentHighlights>에서 이어집니다.
+
 ## 적재 상태 관찰
 
 `model.loadState`는 뷰어가 문서를 표시할 준비가 됐는지 알려줍니다. 페이지 수·검색창

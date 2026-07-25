@@ -13,6 +13,9 @@ struct ContentView: View {
   /// 합성 문서 생성 진행 중 여부 (버튼 중복 탭 방지).
   @State private var isGeneratingSyntheticDocument = false
 
+  /// 스캔 문서 생성 진행 중 여부 (버튼 중복 탭 방지).
+  @State private var isGeneratingScannedDocument = false
+
   /// 선택 메뉴 커스텀 항목이 남긴 알림 메시지 (M11 `.papyrusSelectionMenu` 데모용).
   ///
   /// `nil`이 아니면 알림을 띄운다 — 액션 클로저가 실제로 `selectedText`를 수신·사용하는지
@@ -45,7 +48,15 @@ struct ContentView: View {
                 await self.generateSyntheticDocument()
               }
             }
-            .disabled(self.isGeneratingSyntheticDocument)
+            .disabled(self.isGeneratingSyntheticDocument || self.isGeneratingScannedDocument)
+          }
+          ToolbarItem {
+            Button("Generate Scanned Document") {
+              Task {
+                await self.generateScannedDocument()
+              }
+            }
+            .disabled(self.isGeneratingSyntheticDocument || self.isGeneratingScannedDocument)
           }
         }
     }
@@ -102,11 +113,15 @@ struct ContentView: View {
   /// 디테일 영역: 미열림 안내 / 로딩 중 / 뷰어.
   @ViewBuilder
   private var detailContent: some View {
-    if self.isGeneratingSyntheticDocument || self.loader.isLoading {
+    if self.isGeneratingSyntheticDocument || self.isGeneratingScannedDocument
+      || self.loader.isLoading {
       ProgressView("Preparing document…")
     } else if let document = self.loader.document {
-      PapyrusReader(document: document, model: self.loader.readerModel)
-        .papyrusSelectionMenu(self.selectionMenuItems)
+      PapyrusReader(
+        document: document, model: self.loader.readerModel,
+        textProvider: self.loader.textProvider
+      )
+      .papyrusSelectionMenu(self.selectionMenuItems)
     } else {
       ContentUnavailableView(
         "No Document Open", systemImage: "doc",
@@ -192,5 +207,15 @@ struct ContentView: View {
     }
     let data = SyntheticPDF.make(pageCount: 5_000)
     await self.loader.open(data: data, displayName: "Synthetic (5,000 pages)")
+  }
+
+  /// "스캔 문서 생성" 메뉴 동작 — 내장 텍스트 없는 합성 PDF를 만들어 Vision OCR
+  /// 텍스트 공급원과 함께 연다.
+  private func generateScannedDocument() async {
+    self.isGeneratingScannedDocument = true
+    defer {
+      self.isGeneratingScannedDocument = false
+    }
+    await self.loader.openScannedDemo()
   }
 }

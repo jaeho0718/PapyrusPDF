@@ -16,21 +16,24 @@
 		6F59EC1EEE2B96581FD2C545 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */; };
 		72CE67BDD4494AC9E182CDBC /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90B69F7FB86B59D61CC469E3 /* SearchBar.swift */; };
 		89C5BFDD20BE4F18C4BCCF04 /* DocumentLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0625444AF994D86F49FE7287 /* DocumentLoader.swift */; };
+		AD3C2FDB9E0CB8F0ED76F392 /* VisionTextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896EDAF1120B69FD4AA9BA08 /* VisionTextProvider.swift */; };
 		BC29B5AB711D4578E178D14A /* Papyrus in Frameworks */ = {isa = PBXBuildFile; productRef = 222EDA4145742D3DB7CF5941 /* Papyrus */; };
 		BD218099901B3DBEAFB04B39 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9434A6D8CDF8787E0CB92F /* ContentView.swift */; };
 		BF215D1638E9CAB1B63D4AC6 /* PapyrusDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8CF57E4E6CC2A3F0940F948 /* PapyrusDemoApp.swift */; };
 		E2CFD4F63F073107EB7B4EAA /* SyntheticPDF.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D7C2451AC2EF9163AE3C36 /* SyntheticPDF.swift */; };
+		E54A4839FCA0F46B4C7CA7DC /* VisionTextProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896EDAF1120B69FD4AA9BA08 /* VisionTextProvider.swift */; };
 		E619F77301461A5692DB50CC /* OutlineSidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F278E92B770AC17F1F1BA584 /* OutlineSidebar.swift */; };
 		E9334E011382AAADF083F7D3 /* Papyrus in Frameworks */ = {isa = PBXBuildFile; productRef = C2923EB2BFEF8F0EF87D2378 /* Papyrus */; };
 		EAFB54DFEBB8710B4C0966C7 /* ReaderToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		01A845B4974FB8FC4674CD80 /* PapyrusDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PapyrusDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		01A845B4974FB8FC4674CD80 /* PapyrusDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PapyrusDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0625444AF994D86F49FE7287 /* DocumentLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentLoader.swift; sourceTree = "<group>"; };
 		2D9434A6D8CDF8787E0CB92F /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		40D7C2451AC2EF9163AE3C36 /* SyntheticPDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntheticPDF.swift; sourceTree = "<group>"; };
 		56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderToolbar.swift; sourceTree = "<group>"; };
+		896EDAF1120B69FD4AA9BA08 /* VisionTextProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionTextProvider.swift; sourceTree = "<group>"; };
 		90B69F7FB86B59D61CC469E3 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		A8CF57E4E6CC2A3F0940F948 /* PapyrusDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PapyrusDemoApp.swift; sourceTree = "<group>"; };
 		B5EEBDD386F870F54DE0C6F2 /* Papyrus */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Papyrus; path = ../..; sourceTree = SOURCE_ROOT; };
@@ -86,6 +89,7 @@
 				56A149AFCC0801EEC6011331 /* ReaderToolbar.swift */,
 				90B69F7FB86B59D61CC469E3 /* SearchBar.swift */,
 				40D7C2451AC2EF9163AE3C36 /* SyntheticPDF.swift */,
+				896EDAF1120B69FD4AA9BA08 /* VisionTextProvider.swift */,
 			);
 			path = PapyrusDemo;
 			sourceTree = "<group>";
@@ -191,6 +195,7 @@
 				EAFB54DFEBB8710B4C0966C7 /* ReaderToolbar.swift in Sources */,
 				636B924FC7BFA721BB36BBEF /* SearchBar.swift in Sources */,
 				E2CFD4F63F073107EB7B4EAA /* SyntheticPDF.swift in Sources */,
+				AD3C2FDB9E0CB8F0ED76F392 /* VisionTextProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -205,6 +210,7 @@
 				6F59EC1EEE2B96581FD2C545 /* ReaderToolbar.swift in Sources */,
 				72CE67BDD4494AC9E182CDBC /* SearchBar.swift in Sources */,
 				3E22936217F6A2563A83AEE2 /* SyntheticPDF.swift in Sources */,
+				E54A4839FCA0F46B4C7CA7DC /* VisionTextProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,7 +224,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 88DQM3PTQR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -385,7 +390,6 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 88DQM3PTQR;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
