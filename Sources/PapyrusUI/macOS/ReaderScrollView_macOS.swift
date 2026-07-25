@@ -68,6 +68,18 @@ final class ReaderScrollHostView: NSView, ReaderScrollHost {
   /// 마지막으로 통지한 뷰포트 크기 (중복 통지 방지).
   private var lastViewportSize: CGSize = .zero
 
+  /// 영역 선택 메뉴(`popUp`) 액션 브리지 보관 (`FlippedDocumentView.menuActionBridges`와
+  /// 별개 — 우클릭 pull 경로는 documentView가, push(popUp) 경로는 이 뷰가 보관한다).
+  ///
+  /// `MenuPresenter_macOS.swift`(파일 분리된 `ReaderMenuPresenting` 채택)가 참조하므로
+  /// `private`가 아니라 모듈 스코프로 둔다.
+  var menuActionBridges: [MenuActionBridge] = []
+
+  /// 표시 중인 영역 선택 popUp 메뉴 (`dismissSelectionMenu`의 취소 대상).
+  ///
+  /// `MenuPresenter_macOS.swift`가 참조하므로 모듈 스코프로 둔다.
+  var presentedMenu: NSMenu?
+
   /// 페이지 컨테이너 레이어들이 붙는 루트.
   ///
   /// `setUp()`이 초기화 시점에 `documentView.layer`를 반드시 만들어 두므로 항상 존재한다

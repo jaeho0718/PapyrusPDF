@@ -1,6 +1,15 @@
+import CoreGraphics
 import Foundation
 import Observation
 import Papyrus
+
+/// M12 `SelectableRegion` 데모용 메타데이터 (설계 §1.1 DocC 레시피의 `FigureInfo` 예시를
+/// 그대로 따른다). 페이지 0에 등록해 두고, 선택 메뉴 빌더가 `.region` 컨텍스트에서
+/// `as?`로 캐스팅해 표시한다.
+struct FigureInfo: Sendable {
+  /// 영역 설명 문구 (선택 시 알림에 표시).
+  let caption: String
+}
 
 /// 파일 열기·합성 문서 생성을 담당하는 데모 앱 전용 관찰 모델.
 ///
@@ -71,11 +80,29 @@ final class DocumentLoader {
       self.openWarnings = document.openWarnings
       self.outline = try await document.outline
       self.readerModel = PapyrusReaderModel()
+      self.registerDemoSelectableRegion(on: self.readerModel)
       self.displayName = displayName
     } catch let error as PapyrusError {
       self.errorMessage = error.errorDescription ?? "The document could not be opened."
     } catch {
       self.errorMessage = "The document could not be opened: \(error)"
     }
+  }
+
+  /// M12 데모: 페이지 0에 `SelectableRegion` 1개를 등록한다.
+  ///
+  /// PDF 페이지 공간(y-위, 원점 좌하단) 기준 좌하단 근방의 작은 사각형이라 어떤 페이지
+  /// 크기(합성 문서의 US Letter, 실제 파일의 임의 크기)에서도 안전하게 페이지 안에
+  /// 들어간다. 리더가 아직 표시되기 전(`readerModel` 생성 직후)에 등록해도 안전하다 —
+  /// `setSelectableRegions(_:forPage:)`는 적재 전 호출을 보류했다가 적재 완료 시
+  /// 자동 반영한다.
+  /// - Parameter model: 등록 대상 모델.
+  private func registerDemoSelectableRegion(on model: PapyrusReaderModel) {
+    let quad = Quad(rect: CGRect(x: 24, y: 24, width: 180, height: 56))
+    let region = SelectableRegion(
+      id: "demo-figure", pageIndex: 0, quad: quad,
+      metadata: FigureInfo(caption: "Registered via setSelectableRegions(_:forPage:) — M12 demo")
+    )
+    model.setSelectableRegions([region], forPage: 0)
   }
 }

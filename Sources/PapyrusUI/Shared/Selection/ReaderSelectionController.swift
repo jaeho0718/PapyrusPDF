@@ -1,12 +1,16 @@
 import CoreGraphics
 import PapyrusCore
 
-/// 선택 상태 기계의 본체. 파일 3개로 나눈다: 값 타입은 `+Types.swift`, 본체(이 파일) =
-/// 상태·이벤트 진입·통지, `+Resolution` = 점→위치 해석·선택 재계산·quad/핸들 조회·문자열 조립.
+/// 선택 상태 기계의 본체. 파일 4개로 나눈다: 값 타입은 `+Types.swift`, 본체(이 파일) =
+/// 상태·이벤트 진입(드래그·핸들·clear·select)·통지, `+Resolution` = 점→위치 해석·선택
+/// 재계산·quad/핸들 조회·문자열 조립, `+Region` = 영역 등록부·히트·활성 선택 투영·`tap(at:)`
+/// 진입점(본체 길이 한도로 이설).
 ///
-/// 상태: `idle` / `dragging(DragSession)` (kind: `.new`·`.handle`) / `selected(SelectedState)`.
-/// 불변식: **활성 드래그 세션은 항상 0 또는 1개**이고, 세션은 `dragToken`으로 식별된다.
-/// 모든 상태 전이는 메인 액터에서 동기적으로 일어난다 — 전이 중 재진입 없음.
+/// 상태: `idle` / `dragging(DragSession)` (kind: `.new`·`.handle`) / `selected(SelectedState)`
+/// / `regionSelected(SelectableRegion)`. 활성 선택(텍스트·영역)은 항상 이 네 상태 중
+/// 하나로만 표현되며 서로 상호 배타다 (§3 전이표). 불변식: **활성 드래그 세션은 항상
+/// 0 또는 1개**이고, 세션은 `dragToken`으로 식별된다. 모든 상태 전이는 메인 액터에서
+/// 동기적으로 일어난다 — 전이 중 재진입 없음.
 @MainActor
 package final class ReaderSelectionController {
   /// 선택 상태.
@@ -19,6 +23,8 @@ package final class ReaderSelectionController {
     case dragging(DragSession)
     /// 확정 선택.
     case selected(SelectedState)
+    /// 선택 가능 영역 확정 선택 (활성 선택 단일 슬롯의 네 번째 상태 — 텍스트와 상호 배타).
+    case regionSelected(SelectableRegion)
   }
 
   /// 확정 선택 변경 (드래그 중 실시간 포함 — 모델 `selection` 반영).
@@ -29,6 +35,15 @@ package final class ReaderSelectionController {
   package var onMenuRequest: ((_ contentAnchorPage: Int) -> Void)?
   /// 메뉴 닫기 요청 (드래그 시작·해제 시).
   package var onMenuDismiss: (() -> Void)?
+  /// 영역 선택 변경 통지 (코어가 구독 — 모델 `selectedRegion` 반영). 전이마다 무조건
+  /// 발화한다 — `SelectableRegion`은 Equatable이 아니라 변경 감지를 하지 않는다.
+  package var onRegionSelectionChange: ((SelectableRegion?) -> Void)?
+
+  /// 페이지별 등록 영역 (모델이 진실 원천 — attach 시 전량 재생한다. 컨트롤러는 작업
+  /// 사본).
+  ///
+  /// 파일 분할(`+Region.swift`) 접근을 위해 internal.
+  var regionsByPage: [Int: [SelectableRegion]] = [:]
 
   /// 페이지 콘텐츠 스토어 (해석·문자열 조립의 데이터 원천).
   ///
@@ -68,6 +83,8 @@ package final class ReaderSelectionController {
       )
     case let .selected(selected):
       return selected.selection
+    case .regionSelected:
+      return nil
     }
   }
 
@@ -92,6 +109,13 @@ package final class ReaderSelectionController {
       self.startNewSession(
         at: point, granularity: granularity,
         carryOverInvalidatedPages: selected.selection.pageRange
+      )
+    case let .regionSelected(region): // T28
+      self.notifyRegion(nil)
+      self.onMenuDismiss?()
+      self.startNewSession(
+        at: point, granularity: granularity,
+        carryOverInvalidatedPages: region.pageIndex...region.pageIndex
       )
     }
   }
@@ -187,18 +211,7 @@ package final class ReaderSelectionController {
     self.state = .dragging(session)
   }
 
-  /// 탭/클릭 (T4·T13·T20 — `clear()`와 달리 드래그 중에는 무시한다).
-  package func tap() {
-    guard case let .selected(selected) = self.state else { // T4, T13
-      return
-    }
-    self.state = .idle
-    self.notifyIfChanged(nil)
-    _ = self.diffInvalidate(newRange: nil, previous: selected.selection.pageRange)
-    self.onMenuDismiss?()
-  }
-
-  /// 선택을 해제한다 (T6·T14·T21).
+  /// 선택을 해제한다 (T6·T14·T21·T32).
   package func clear() {
     switch self.state {
     case .idle: // T6
@@ -214,10 +227,15 @@ package final class ReaderSelectionController {
       self.notifyIfChanged(nil)
       _ = self.diffInvalidate(newRange: nil, previous: selected.selection.pageRange)
       self.onMenuDismiss?()
+    case let .regionSelected(region): // T32
+      self.state = .idle
+      self.notifyRegion(nil)
+      self.onOverlayInvalidate?(region.pageIndex)
+      self.onMenuDismiss?()
     }
   }
 
-  /// 프로그램적으로 선택한다 (T5·T15·T22 — 메뉴는 표시하지 않는다).
+  /// 프로그램적으로 선택한다 (T5·T15·T22·T31 — 메뉴는 표시하지 않는다).
   /// - Parameter selection: 채택할 선택.
   package func select(_ selection: TextSelection) {
     switch self.state {
@@ -238,6 +256,12 @@ package final class ReaderSelectionController {
       _ = self.diffInvalidate(
         newRange: selection.pageRange, previous: selected.selection.pageRange
       )
+    case let .regionSelected(region): // T31
+      self.state = .selected(SelectedState(selection: selection, pendingRefinement: nil))
+      self.notifyRegion(nil)
+      self.onOverlayInvalidate?(region.pageIndex)
+      self.notifyIfChanged(selection)
+      _ = self.diffInvalidate(newRange: selection.pageRange, previous: nil)
     }
   }
 
@@ -253,7 +277,7 @@ package final class ReaderSelectionController {
     self.store.prefetch(range: range, protecting: protectedPages)
   }
 
-  /// teardown 경로 전용: 상태를 idle로 되돌리고(통지 억제) store를 무효화한다 (T26).
+  /// teardown 경로 전용: 상태를 idle로 되돌리고(통지 억제) store를 무효화한다 (T26·T39).
   package func teardown() {
     self.state = .idle
     self.lastNotifiedSelection = nil

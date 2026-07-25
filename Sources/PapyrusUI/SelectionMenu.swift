@@ -3,11 +3,13 @@ import SwiftUI
 
 /// 선택 메뉴가 표시되는 대상입니다.
 ///
-/// 0.2.0 기준 텍스트 선택(``text(_:)``)이 제공되며, 개발자 정의 선택 가능 영역
-/// 케이스가 이후 추가됩니다.
+/// 텍스트 선택(``text(_:)``)과 개발자 정의 선택 가능 영역(``region(_:)``) 두 케이스가
+/// 있습니다.
 public enum SelectionContext: Sendable {
   /// 텍스트 선택입니다.
   case text(TextSelectionContext)
+  /// 개발자 정의 선택 가능 영역입니다.
+  case region(SelectableRegion)
 }
 
 /// 텍스트 선택 메뉴 컨텍스트입니다.
@@ -59,11 +61,14 @@ public struct SelectionMenuItem: Sendable {
   ///
   /// 텍스트 선택이면 ``TextSelectionContext/selectedText``를 시스템 페이스트보드에
   /// 복사합니다. 커스텀 메뉴에 기본 복사를 유지하려면 이 항목을 배열에 포함합니다.
+  /// 영역 컨텍스트에서는 동작하지 않습니다.
   public static var copy: SelectionMenuItem {
     SelectionMenuItem(title: "Copy", systemImage: "doc.on.doc") { context in
       switch context {
       case let .text(textContext):
         PlatformPasteboard.setString(textContext.selectedText)
+      case .region:
+        break
       }
     }
   }

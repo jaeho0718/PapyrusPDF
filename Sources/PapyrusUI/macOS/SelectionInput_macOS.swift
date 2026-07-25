@@ -141,14 +141,15 @@ extension FlippedDocumentView {
 
 /// `copy:` 등 표준 편집 액션의 활성 여부를 응답자 체인에 알린다.
 extension FlippedDocumentView: NSUserInterfaceValidations {
-  /// `copy(_:)`는 선택이 있을 때만 활성화한다.
+  /// `copy(_:)`는 텍스트 선택이 있을 때만 활성화한다 (영역 선택은 복사할 텍스트가
+  /// 없어 비활성).
   /// - Parameter item: 검증할 액션 항목.
   /// - Returns: 활성화 여부.
   func validateUserInterfaceItem(_ item: NSValidatedUserInterfaceItem) -> Bool {
     guard item.action == #selector(FlippedDocumentView.copy(_:)) else {
       return true
     }
-    return self.selectionSink?.hostHasSelection() ?? false
+    return self.selectionSink?.hostCanCopy() ?? false
   }
 }
 #endif

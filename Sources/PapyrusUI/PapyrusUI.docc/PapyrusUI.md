@@ -26,3 +26,7 @@ SwiftUI 퍼사드와 가상화 스크롤 뷰어.
 - ``SelectionMenuItem``
 - ``SelectionMenuItemsBuilder``
 - ``SwiftUICore/View/papyrusSelectionMenu(_:)``
+
+### 선택 가능 영역
+
+- ``SelectableRegion``

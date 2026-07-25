@@ -221,7 +221,7 @@ struct ReaderCoreSelectionTests {
     )
 
     model.select(selection) // 보류.
-    model.beginLoading() // 보류 폐기 + nil 리셋.
+    model.beginLoading(documentID: ObjectIdentifier(core)) // 보류 폐기 + nil 리셋.
     model.attach(core: core)
 
     #expect(model.selection == nil)

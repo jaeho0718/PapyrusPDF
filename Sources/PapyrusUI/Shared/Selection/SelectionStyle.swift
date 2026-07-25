@@ -38,6 +38,9 @@ package enum UILimits {
   /// 선택 문자열(복사·selectedString) 총량 캡 (UTF-16 코드유닛). 초과분은
   /// Character 경계로 안쪽 스냅해 절단한다 — 병적 문서에서 메모리 폭주 방지.
   package static let maxSelectedTextUTF16 = 4 << 20
+  /// 페이지당 선택 가능 영역 등록 상한 (초과분은 앞에서부터 유지, 절단) — 탭 히트테스트
+  /// O(영역 수)의 결정적 유계.
+  package static let maxSelectableRegionsPerPage = 1_024
 }
 
 /// 플랫폼 페이스트보드 어댑터 (복사 한 곳).
