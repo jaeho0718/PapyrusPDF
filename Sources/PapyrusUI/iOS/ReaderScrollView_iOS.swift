@@ -13,14 +13,27 @@ import UIKit
 /// - `visibleContentRect = CGRect(origin: contentOffset/zoom, size: bounds.size/zoom)`.
 @MainActor
 final class ReaderScrollHostView: UIView, ReaderScrollHost, UIScrollViewDelegate {
-  /// 호스트 이벤트 수신부 (코어가 자신을 대입한다).
-  weak var eventSink: (any ReaderHostEventSink)?
+  /// 호스트 이벤트 수신부 (코어가 자신을 대입한다). 코어는 `ReaderSelectionEventSink`도
+  /// 구현하므로, 대입 시 선택 입력·메뉴 프레젠터에 그 표면을 함께 배선한다.
+  weak var eventSink: (any ReaderHostEventSink)? {
+    didSet {
+      let selectionSink = self.eventSink as? ReaderSelectionEventSink
+      self.selectionInput.sink = selectionSink
+      self.editMenuPresenter.updateSink(selectionSink)
+    }
+  }
 
   /// 내부 스크롤 뷰.
   private let scrollView = UIScrollView()
 
   /// 콘텐츠를 백킹하는 문서 뷰 (줌 대상).
   private let documentView = UIView()
+
+  /// 롱프레스·핸들 팬·탭 제스처 + 확대 루프·오토스크롤 소유자.
+  private let selectionInput = SelectionInput()
+
+  /// `UIEditMenuInteraction` 브리지.
+  private let editMenuPresenter = EditMenuPresenter()
 
   /// 페이지 컨테이너 레이어들이 붙는 루트.
   var contentLayer: CALayer {
@@ -64,12 +77,14 @@ final class ReaderScrollHostView: UIView, ReaderScrollHost, UIScrollViewDelegate
     self.setUp()
   }
 
-  /// 스크롤 뷰·문서 뷰를 배선한다.
+  /// 스크롤 뷰·문서 뷰를 배선하고 선택 입력·메뉴 프레젠터를 부착한다.
   private func setUp() {
     self.scrollView.delegate = self
     self.scrollView.contentInsetAdjustmentBehavior = .never
     self.scrollView.addSubview(self.documentView)
     self.addSubview(self.scrollView)
+    self.selectionInput.attach(to: self.documentView, scrollView: self.scrollView)
+    self.editMenuPresenter.attach(documentView: self.documentView)
   }
 
   /// 레이아웃 갱신 — 뷰포트 크기 변화를 감지해 코어에 통지한다.
@@ -142,6 +157,45 @@ final class ReaderScrollHostView: UIView, ReaderScrollHost, UIScrollViewDelegate
     _ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat
   ) {
     self.eventSink?.hostZoomInteractionDidEnd()
+  }
+
+  /// 스크롤 시작 — 표시 중인 선택 메뉴를 닫는다.
+  /// - Parameter scrollView: 스크롤될 뷰.
+  func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    self.editMenuPresenter.handleScrollWillBegin()
+  }
+
+  /// 드래그 종료 — 감속 없이 즉시 정지하면 메뉴 재표시를 시도한다.
+  /// - Parameters:
+  ///   - scrollView: 스크롤된 뷰.
+  ///   - decelerate: 감속(관성 스크롤) 진행 여부.
+  func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    guard !decelerate else {
+      return
+    }
+    self.editMenuPresenter.handleScrollDidSettle()
+  }
+
+  /// 관성 스크롤 정지 — 메뉴 재표시를 시도한다.
+  /// - Parameter scrollView: 정지한 뷰.
+  func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+    self.editMenuPresenter.handleScrollDidSettle()
+  }
+}
+
+/// `ReaderMenuPresenting` 채택 — 구현은 `EditMenuPresenter`에 위임한다.
+extension ReaderScrollHostView: ReaderMenuPresenting {
+  /// `EditMenuPresenter.present(_:around:)`에 위임한다.
+  /// - Parameters:
+  ///   - items: 표시할 메뉴 항목.
+  ///   - contentRect: 앵커 사각형 (콘텐츠 공간).
+  func presentSelectionMenu(_ items: [ResolvedMenuItem], around contentRect: CGRect) {
+    self.editMenuPresenter.present(items, around: contentRect)
+  }
+
+  /// `EditMenuPresenter.dismiss()`에 위임한다.
+  func dismissSelectionMenu() {
+    self.editMenuPresenter.dismiss()
   }
 }
 

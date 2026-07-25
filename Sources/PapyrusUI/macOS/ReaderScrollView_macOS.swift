@@ -12,6 +12,28 @@ final class FlippedDocumentView: NSView {
   override var isFlipped: Bool {
     true
   }
+
+  /// 선택 이벤트 수신부 (`ReaderScrollHostView.eventSink` didSet이 배선한다).
+  ///
+  /// 마우스·⌘C·컨텍스트 메뉴 오버라이드는 `SelectionInput_macOS.swift`의 extension에
+  /// 있다 (파일 분리 — 이 파일 수정 최소화). 저장 프로퍼티는 extension에 못 두므로
+  /// 여기 둔다.
+  weak var selectionSink: (any ReaderSelectionEventSink)?
+
+  /// `mouseDown` 시점 위치 (콘텐츠 공간) — `mouseUp`의 클릭/드래그 판정용.
+  var mouseDownPoint: CGPoint?
+
+  /// 현재 클릭이 드래그(선택 시작)로 승격됐는지 여부.
+  var isSelectionDragging = false
+
+  /// 뷰 밖 정지 마우스의 연속 오토스크롤용 60Hz 타이머 (드래그 수명에 결속).
+  var autoscrollTimer: Timer?
+
+  /// 오토스크롤 틱이 재사용할 마지막 마우스 이벤트.
+  var lastDragEvent: NSEvent?
+
+  /// 우클릭 메뉴 액션 브리지 보관 (`NSMenuItem.target`은 weak 참조라 별도 보관 필요).
+  var menuActionBridges: [MenuActionBridge] = []
 }
 
 /// NSScrollView 기반 호스트. documentView = `FlippedDocumentView`
@@ -26,14 +48,22 @@ final class FlippedDocumentView: NSView {
 /// - `setFrameSize`/`viewDidEndLiveResize` → `hostViewportSizeDidChange`.
 @MainActor
 final class ReaderScrollHostView: NSView, ReaderScrollHost {
-  /// 호스트 이벤트 수신부 (코어가 자신을 대입한다).
-  weak var eventSink: (any ReaderHostEventSink)?
+  /// 호스트 이벤트 수신부 (코어가 자신을 대입한다). 코어는 `ReaderSelectionEventSink`도
+  /// 구현하므로, 대입 시 documentView에 그 표면을 함께 배선한다.
+  weak var eventSink: (any ReaderHostEventSink)? {
+    didSet {
+      self.documentView.selectionSink = self.eventSink as? ReaderSelectionEventSink
+    }
+  }
 
   /// 내부 스크롤 뷰.
   private let scrollView = NSScrollView()
 
   /// 콘텐츠를 백킹하는 문서 뷰 (좌상단 원점 강제).
-  private let documentView = FlippedDocumentView()
+  ///
+  /// `SelectionInput_macOS.swift`(마우스·⌘C·컨텍스트 메뉴 오버라이드)가 참조하므로
+  /// `private`가 아니라 모듈 스코프로 둔다 (M5 `TileRenderQueue`+확장 파일 분리와 동일 패턴).
+  let documentView = FlippedDocumentView()
 
   /// 마지막으로 통지한 뷰포트 크기 (중복 통지 방지).
   private var lastViewportSize: CGSize = .zero

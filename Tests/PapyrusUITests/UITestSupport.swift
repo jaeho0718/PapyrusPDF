@@ -62,6 +62,31 @@ enum UITestSupport {
     return ReaderCore(layout: layout, renderQueue: queue)
   }
 
+  /// 지정한 페이지 수·크기의 균일 문서로, 선택 컨트롤러를 주입한 `ReaderCore`를 조립한다
+  /// (선택 통합 테스트 전용 — `ReaderCoreSelectionTests`).
+  @MainActor
+  static func makeReaderCore(
+    pageCount: Int, pageWidth: Double = 200, pageHeight: Double = 200,
+    workerCount: Int = 2, pixelScale: CGFloat = 1, selectionController: ReaderSelectionController
+  ) async throws -> ReaderCore {
+    let fixture = PDFFixtureBuilder(
+      pageCount: pageCount, pageWidth: pageWidth, pageHeight: pageHeight
+    ).build()
+    let document = try await PDFDocumentCore.open(data: fixture.data)
+    let pageSizes = try await document.pageTree().records.map(\.displaySize)
+    let layout = ReaderLayoutEngine(pageSizes: pageSizes)
+    let configuration = RenderConfiguration(
+      workerCount: workerCount, pixelScale: pixelScale, installsMemoryPressureMonitor: false
+    )
+    let queue = TileRenderQueue(
+      documentData: document.sourceBytes, pageSizes: pageSizes, configuration: configuration
+    )
+    return ReaderCore(
+      layout: layout, renderQueue: queue, pixelScale: pixelScale,
+      selectionController: selectionController
+    )
+  }
+
   /// 파서(레이아웃)가 실제 CGPDFDocument보다 페이지가 많다고 보는 손상 문서를
   /// 시뮬레이션한다 — `realPageCount` 뒤의 `phantomPageCount`장은 레이아웃·`pageSizes`에는
   /// 존재하지만 실제 CG 문서에는 없어, 그 페이지 요청은 항상 `RenderError.pageUnavailable`로
@@ -139,6 +164,80 @@ struct ScrollToCall: Equatable {
   let zoomScale: CGFloat?
   /// 애니메이션 여부.
   let animated: Bool
+}
+
+/// 고정 `[Int: PageTextContent]` + throw 지정 페이지로 응답하는 결정적 텍스트 프로바이더
+/// (선택 스토어/컨트롤러 테스트 전용).
+struct DictionaryTextProvider: PageTextProvider {
+  /// 페이지별 콘텐츠.
+  let contents: [Int: PageTextContent]
+
+  /// 요청 시 항상 throw할 페이지 집합.
+  var throwingPages: Set<Int> = []
+
+  /// 지정 콘텐츠를 반환한다 (throw 지정 페이지·미보유 페이지는 실패).
+  func textContent(forPage pageIndex: Int) async throws -> PageTextContent {
+    guard !self.throwingPages.contains(pageIndex) else {
+      throw PapyrusError.damagedDocument
+    }
+    guard let content = self.contents[pageIndex] else {
+      throw PapyrusError.damagedDocument
+    }
+    return content
+  }
+}
+
+/// 페이지별 `CheckedContinuation` 게이트로 도착 시점을 테스트가 수동 제어하는 프로바이더
+/// (잠정 클램프→재계산의 결정적 재현. `Task.sleep` 없이 도착 타이밍을 정확히 고정한다).
+final class GatedTextProvider: PageTextProvider, @unchecked Sendable {
+  /// 페이지별 콘텐츠 (게이트 해제 시 반환할 값).
+  private let contents: [Int: PageTextContent]
+
+  /// 페이지별 대기 중 continuation.
+  private let lock = NSLock()
+  private var waiters: [Int: [CheckedContinuation<Void, Never>]] = [:]
+  private var openedPages: Set<Int> = []
+
+  /// 게이트가 걸린 프로바이더를 만든다.
+  /// - Parameter contents: 페이지별 콘텐츠 (게이트 해제 시 반환할 값).
+  init(contents: [Int: PageTextContent]) {
+    self.contents = contents
+  }
+
+  /// 지정 페이지의 게이트를 연다 (대기 중 요청·이후 요청 모두 즉시 통과).
+  /// - Parameter pageIndex: 게이트를 열 페이지 인덱스.
+  func open(_ pageIndex: Int) {
+    self.lock.lock()
+    self.openedPages.insert(pageIndex)
+    let pending = self.waiters.removeValue(forKey: pageIndex) ?? []
+    self.lock.unlock()
+    for continuation in pending {
+      continuation.resume()
+    }
+  }
+
+  /// 페이지 콘텐츠를 반환한다 (게이트가 열릴 때까지 대기).
+  func textContent(forPage pageIndex: Int) async throws -> PageTextContent {
+    await self.waitForGate(pageIndex)
+    guard let content = self.contents[pageIndex] else {
+      throw PapyrusError.damagedDocument
+    }
+    return content
+  }
+
+  /// 게이트가 열릴 때까지 정지한다 (이미 열려 있으면 즉시 반환).
+  private func waitForGate(_ pageIndex: Int) async {
+    await withCheckedContinuation { continuation in
+      self.lock.lock()
+      if self.openedPages.contains(pageIndex) {
+        self.lock.unlock()
+        continuation.resume()
+        return
+      }
+      self.waiters[pageIndex, default: []].append(continuation)
+      self.lock.unlock()
+    }
+  }
 }
 
 /// 테스트용 목 스크롤 호스트 — `visibleContentRect`/`zoomScale` 직접 설정, `scrollTo` 호출 기록.

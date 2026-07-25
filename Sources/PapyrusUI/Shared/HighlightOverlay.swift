@@ -46,6 +46,8 @@ package final class HighlightOverlay {
     currentMatchLayer.fillColor = HighlightStyle.currentMatchFill
     allMatchesLayer.lineWidth = 0
     currentMatchLayer.lineWidth = 0
+    allMatchesLayer.zPosition = OverlayZPosition.searchAllMatches
+    currentMatchLayer.zPosition = OverlayZPosition.searchCurrentMatch
     parent.addSublayer(allMatchesLayer)
     parent.addSublayer(currentMatchLayer)
     self.allMatchesLayer = allMatchesLayer
@@ -59,17 +61,13 @@ package final class HighlightOverlay {
   package func apply(_ highlights: PageSearchHighlights, currentOrdinal: Int?) {
     let allPath = CGMutablePath()
     for quads in highlights.matches {
-      for quad in quads {
-        allPath.addPath(Self.path(for: quad))
-      }
+      allPath.addPath(QuadPathBuilder.path(for: quads))
     }
     self.allMatchesLayer.path = allPath
 
     let currentPath = CGMutablePath()
     if let currentOrdinal, highlights.matches.indices.contains(currentOrdinal) {
-      for quad in highlights.matches[currentOrdinal] {
-        currentPath.addPath(Self.path(for: quad))
-      }
+      currentPath.addPath(QuadPathBuilder.path(for: highlights.matches[currentOrdinal]))
     }
     self.currentMatchLayer.path = currentPath
   }
@@ -95,18 +93,5 @@ package final class HighlightOverlay {
   package func removeFromParent() {
     self.allMatchesLayer.removeFromSuperlayer()
     self.currentMatchLayer.removeFromSuperlayer()
-  }
-
-  /// quad 하나를 닫힌 사변형 경로로 변환한다.
-  /// - Parameter quad: 변환할 quad.
-  /// - Returns: bottomLeft → bottomRight → topRight → topLeft → 닫힘 순의 경로.
-  private static func path(for quad: Quad) -> CGPath {
-    let path = CGMutablePath()
-    path.move(to: quad.bottomLeft)
-    path.addLine(to: quad.bottomRight)
-    path.addLine(to: quad.topRight)
-    path.addLine(to: quad.topLeft)
-    path.closeSubpath()
-    return path
   }
 }
