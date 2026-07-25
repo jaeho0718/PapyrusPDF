@@ -84,7 +84,7 @@ final class ReaderScrollHostView: UIView, ReaderScrollHost, UIScrollViewDelegate
     self.scrollView.addSubview(self.documentView)
     self.addSubview(self.scrollView)
     self.selectionInput.attach(to: self.documentView, scrollView: self.scrollView)
-    self.editMenuPresenter.attach(hostView: self, documentView: self.documentView)
+    self.editMenuPresenter.attach(documentView: self.documentView)
   }
 
   /// 레이아웃 갱신 — 뷰포트 크기 변화를 감지해 코어에 통지한다.

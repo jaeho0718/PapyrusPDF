@@ -4,12 +4,16 @@ import UIKit
 
 /// `UIEditMenuInteraction` 브리지 — `ReaderScrollHostView`가 `ReaderMenuPresenting`을
 /// 이 타입에 위임한다.
+///
+/// 좌표계 주의: `UIEditMenuInteraction`은 `sourcePoint`·`targetRectFor`의 반환값을 상호작용이
+/// **설치된 뷰(`documentView`) 자신의 좌표계**로 해석한다(Apple 헤더 주석: "relative to the
+/// interaction's view"). `documentView`는 줌 대상 뷰라 그 자신의 bounds 좌표계가 곧 콘텐츠
+/// 공간이므로, `present(_:around:)`가 받는 `contentRect`(콘텐츠 공간)를 다른 뷰 좌표계로
+/// 변환하면 안 된다 — 변환하면 이미 화면 좌표로 바뀐 값을 상호작용이 다시 콘텐츠 좌표로
+/// 오인해 실제 화면 밖 위치로 튀고, UIKit이 가장 가까운 화면 모서리로 메뉴를 클램프한다.
 @MainActor
 final class EditMenuPresenter: NSObject {
-  /// 메뉴 소스 사각형을 옮길 좌표계 기준 뷰 (호스트 뷰).
-  private weak var hostView: UIView?
-
-  /// `contentRect` 변환 기준 문서 뷰 (콘텐츠 공간).
+  /// 상호작용이 설치된 문서 뷰 (콘텐츠 공간 — 상호작용 좌표계와 동일).
   private weak var documentView: UIView?
 
   /// `hostHasSelection` 재질의용 선택 이벤트 수신부.
@@ -21,18 +25,15 @@ final class EditMenuPresenter: NSObject {
   /// 마지막으로 표시(요청)한 항목 (스크롤 정지 후 재표시용 캐시).
   private var cachedItems: [ResolvedMenuItem] = []
 
-  /// 마지막으로 표시(요청)한 앵커 사각형 (콘텐츠 공간).
+  /// 마지막으로 표시(요청)한 앵커 사각형 (콘텐츠 공간 — 상호작용에 변환 없이 그대로 전달).
   private var cachedContentRect: CGRect = .zero
 
   /// 현재 표시 중 여부 (스크롤 시작 시 닫을지 판단).
   private var isPresenting = false
 
   /// documentView에 상호작용을 설치한다.
-  /// - Parameters:
-  ///   - hostView: 좌표 변환 기준 호스트 뷰.
-  ///   - documentView: 콘텐츠 공간 기준 문서 뷰.
-  func attach(hostView: UIView, documentView: UIView) {
-    self.hostView = hostView
+  /// - Parameter documentView: 콘텐츠 공간 기준 문서 뷰 (상호작용이 설치될 뷰).
+  func attach(documentView: UIView) {
     self.documentView = documentView
     let interaction = UIEditMenuInteraction(delegate: self)
     documentView.addInteraction(interaction)
@@ -48,15 +49,15 @@ final class EditMenuPresenter: NSObject {
   /// 콘텐츠 공간 `contentRect` 주변에 메뉴를 표시한다.
   /// - Parameters:
   ///   - items: 표시할 메뉴 항목.
-  ///   - contentRect: 앵커 사각형 (콘텐츠 공간).
+  ///   - contentRect: 앵커 사각형 (콘텐츠 공간 — `documentView` 자신의 좌표계와 동일해
+  ///     변환 없이 그대로 상호작용에 전달한다).
   func present(_ items: [ResolvedMenuItem], around contentRect: CGRect) {
-    guard let documentView, let hostView, !items.isEmpty else {
+    guard self.documentView != nil, !items.isEmpty else {
       return
     }
     self.cachedItems = items
     self.cachedContentRect = contentRect
-    let viewRect = documentView.convert(contentRect, to: hostView)
-    let sourcePoint = CGPoint(x: viewRect.midX, y: viewRect.minY)
+    let sourcePoint = EditMenuGeometry.topCenterSourcePoint(of: contentRect)
     let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: sourcePoint)
     self.interaction?.presentEditMenu(with: configuration)
     self.isPresenting = true
@@ -110,18 +111,16 @@ extension EditMenuPresenter: @MainActor UIEditMenuInteractionDelegate {
     return UIMenu(children: actions)
   }
 
-  /// 앵커 사각형을 호스트 뷰 좌표로 변환해 반환한다.
+  /// 캐시된 앵커 사각형을 반환한다 (상호작용이 설치된 `documentView` 자신의 좌표계라
+  /// 변환이 필요 없다 — 타입 문서 참조).
   /// - Parameters:
   ///   - interaction: 상호작용.
   ///   - configuration: 메뉴 구성.
-  /// - Returns: 호스트 뷰 좌표의 앵커 사각형.
+  /// - Returns: 앵커 사각형 (콘텐츠 공간 = `documentView` 좌표계).
   func editMenuInteraction(
     _ interaction: UIEditMenuInteraction, targetRectFor configuration: UIEditMenuConfiguration
   ) -> CGRect {
-    guard let documentView, let hostView else {
-      return .zero
-    }
-    return documentView.convert(self.cachedContentRect, to: hostView)
+    self.cachedContentRect
   }
 }
 #endif
