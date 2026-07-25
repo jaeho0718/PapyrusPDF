@@ -2,9 +2,9 @@ import CoreGraphics
 import PapyrusCore
 
 // 이 파일은 `ReaderSelectionController`의 quad·핸들·문자열 조회(displayQuads/
-// handlePlacement/handleHit/selectedString/menuAnchorRect)를 담는다 — 상태·이벤트
-// 진입·통지는 `ReaderSelectionController.swift`, 해석·재계산은 `+Resolution.swift` 참조.
-// 설계 §5 한도 초과 시 파일 분할 허용에 따른 분리.
+// handlePlacement/handleHit/selectedString/selectedStringFromCache/menuAnchorRect)를
+// 담는다 — 상태·이벤트 진입·통지는 `ReaderSelectionController.swift`, 해석·재계산은
+// `+Resolution.swift` 참조. 설계 §5 한도 초과 시 파일 분할 허용에 따른 분리.
 
 extension ReaderSelectionController {
   /// 페이지의 표시 공간 선택 quad (라인 병합 적용 — 캐시 미보유·선택 밖 페이지는 빈 배열).
@@ -111,7 +111,8 @@ extension ReaderSelectionController {
   /// 선택 문자열 (페이지 경계 `"\n"` 결합, `UILimits` 캡 절단, 선택 없으면 `nil`).
   ///
   /// 진입 시점의 선택 스냅숏으로 조립을 완주한다 — 조립 중(await 사이) 선택이 바뀌어도
-  /// 결과는 "누른 시점의 선택"을 반영한다.
+  /// 결과는 "누른 시점의 선택"을 반영한다. 페이지 문자열은 캐시 우선·미스 시 프로바이더
+  /// 직행(`pageString(forPage:)`)으로 얻으며, 실패한 페이지는 빈 기여로 진행한다(§5.2 규약).
   /// - Returns: 조립된 선택 문자열, 선택이 없으면 `nil`.
   package func selectedString() async -> String? {
     guard let selection = self.selection, !selection.isEmpty else {
@@ -124,24 +125,77 @@ extension ReaderSelectionController {
         break
       }
       let pageString = await self.pageString(forPage: pageIndex)
-      guard
-        let utf16Range = selection.utf16Range(
-          onPage: pageIndex, pageUTF16Length: pageString.utf16.count
-        )
-      else {
-        pieces.append("")
-        continue
-      }
-      let fragment = Self.substring(of: pageString, utf16Range: utf16Range)
-      let remaining = UILimits.maxSelectedTextUTF16 - totalLength
-      guard fragment.utf16.count <= remaining else {
-        pieces.append(Self.snapToCharacterLimit(fragment, utf16Limit: remaining))
+      let shouldStop = Self.appendFragment(
+        of: pageString, forPage: pageIndex, in: selection, pieces: &pieces,
+        totalLength: &totalLength
+      )
+      if shouldStop {
         break
       }
-      pieces.append(fragment)
-      totalLength += fragment.utf16.count
     }
     return pieces.joined(separator: "\n")
+  }
+
+  /// 동기 캐시 전용 조립 — 지오메트리 캐시에 선택 범위 전 페이지가 있을 때만 성공한다.
+  ///
+  /// macOS 우클릭(pull) 표면처럼 `await`할 수 없는 동기 경로의 폴백 전용이다. 진실
+  /// 원천은 어디까지나 `selectedString()`이며, 이 메서드는 캐시가 아직 채워지지 않은
+  /// 한 페이지라도 있으면 즉시 포기하고 `nil`을 반환한다(부분 조립을 반환하지 않는다).
+  /// - Returns: 조립된 선택 문자열, 선택이 없거나 캐시 미스 페이지가 있으면 `nil`.
+  package func selectedStringFromCache() -> String? {
+    guard let selection = self.selection, !selection.isEmpty else {
+      return nil
+    }
+    var pieces: [String] = []
+    var totalLength = 0
+    for pageIndex in selection.pageRange {
+      guard totalLength < UILimits.maxSelectedTextUTF16 else {
+        break
+      }
+      guard let pageString = self.store.geometry(forPage: pageIndex)?.content.string else {
+        return nil
+      }
+      let shouldStop = Self.appendFragment(
+        of: pageString, forPage: pageIndex, in: selection, pieces: &pieces,
+        totalLength: &totalLength
+      )
+      if shouldStop {
+        break
+      }
+    }
+    return pieces.joined(separator: "\n")
+  }
+
+  /// 페이지 문자열 하나를 조각 배열에 반영한다 (경계 구간 추출 + 캡 절단) — `selectedString()`·
+  /// `selectedStringFromCache()`가 공유하는 조립 단계 (캡·경계 스냅 규칙 중복 금지).
+  /// - Parameters:
+  ///   - pageString: 반영할 페이지 문자열.
+  ///   - pageIndex: 그 페이지 인덱스.
+  ///   - selection: 대상 선택.
+  ///   - pieces: 누적 조각 배열 (반영 후 갱신).
+  ///   - totalLength: 누적 UTF-16 길이 (반영 후 갱신).
+  /// - Returns: 캡 절단으로 조립을 끝내야 하면 `true`.
+  private static func appendFragment(
+    of pageString: String, forPage pageIndex: Int, in selection: TextSelection,
+    pieces: inout [String], totalLength: inout Int
+  ) -> Bool {
+    guard
+      let utf16Range = selection.utf16Range(
+        onPage: pageIndex, pageUTF16Length: pageString.utf16.count
+      )
+    else {
+      pieces.append("")
+      return false
+    }
+    let fragment = Self.substring(of: pageString, utf16Range: utf16Range)
+    let remaining = UILimits.maxSelectedTextUTF16 - totalLength
+    guard fragment.utf16.count <= remaining else {
+      pieces.append(Self.snapToCharacterLimit(fragment, utf16Limit: remaining))
+      return true
+    }
+    pieces.append(fragment)
+    totalLength += fragment.utf16.count
+    return false
   }
 
   /// 메뉴 앵커 rect (해당 페이지 quad 합집합 boundingRect — 코어가 콘텐츠 공간으로 변환).

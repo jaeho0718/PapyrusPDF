@@ -264,6 +264,12 @@ final class MockScrollHost: ReaderScrollHost {
   /// `scrollTo` 호출 기록 (순서대로).
   var scrollToCalls: [ScrollToCall] = []
 
+  /// `presentSelectionMenu` 호출 기록 (순서대로) — 항목·앵커 사각형.
+  var presentedMenus: [(items: [ResolvedMenuItem], contentRect: CGRect)] = []
+
+  /// `dismissSelectionMenu` 호출 횟수.
+  var dismissCount = 0
+
   /// 콘텐츠 크기(줌 1 기준)를 설정한다.
   func setContentSize(_ size: CGSize) {
     self.contentSize = size
@@ -282,5 +288,21 @@ final class MockScrollHost: ReaderScrollHost {
     if let zoomScale {
       self.zoomScale = zoomScale
     }
+  }
+}
+
+/// `MockScrollHost`의 ``ReaderMenuPresenting`` 채택 — iOS push 표면 테스트용 (§6-4).
+extension MockScrollHost: ReaderMenuPresenting {
+  /// 호출을 `presentedMenus`에 기록한다.
+  /// - Parameters:
+  ///   - items: 표시할 메뉴 항목.
+  ///   - contentRect: 앵커 사각형 (콘텐츠 공간).
+  func presentSelectionMenu(_ items: [ResolvedMenuItem], around contentRect: CGRect) {
+    self.presentedMenus.append((items, contentRect))
+  }
+
+  /// 호출 횟수를 `dismissCount`에 기록한다.
+  func dismissSelectionMenu() {
+    self.dismissCount += 1
   }
 }

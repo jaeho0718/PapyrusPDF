@@ -35,8 +35,7 @@ package enum SelectionHandle: Sendable, Equatable {
   case end
 }
 
-/// 해소 완료된 메뉴 항목 (현재는 내부 고정 복사 항목 1개 — 향후 공개 빌더 산출물로
-/// 대체될 자리다).
+/// 해소 완료된 메뉴 항목 (``SelectionMenuResolver``가 공개 빌더 산출물을 변환한 결과).
 package struct ResolvedMenuItem {
   /// 표시 타이틀.
   package let title: String
@@ -108,6 +107,13 @@ package protocol ReaderSelectionEventSink: AnyObject {
 }
 
 /// 코어 → 호스트 메뉴 표시 (호스트 뷰가 구현 — iOS push 표면).
+///
+/// 계약 3항:
+/// 1. `contentRect`는 콘텐츠 공간(줌 미적용, `visibleContentRect`와 동축)이다 — 뷰 좌표
+///    변환은 호스트 책임이다 (iOS는 documentView 좌표 = 콘텐츠 공간이라 무변환).
+/// 2. push 표면(`presentSelectionMenu`)은 `SelectionStyle.presentsMenuOnSelectionEnd ==
+///    true` 플랫폼에서만 호출된다 (macOS에서는 호출되지 않으므로 no-op 구현이 적법하다).
+/// 3. `dismissSelectionMenu`는 멱등이다 — 이미 닫힌 상태에서 호출해도 안전하다.
 @MainActor
 package protocol ReaderMenuPresenting: AnyObject {
   /// 콘텐츠 공간 `contentRect` 주변에 메뉴를 표시한다 (뷰 좌표 변환은 호스트 책임).
@@ -116,6 +122,6 @@ package protocol ReaderMenuPresenting: AnyObject {
   ///   - contentRect: 앵커 사각형 (콘텐츠 공간).
   func presentSelectionMenu(_ items: [ResolvedMenuItem], around contentRect: CGRect)
 
-  /// 표시 중 메뉴를 닫는다 (미표시면 no-op).
+  /// 표시 중 메뉴를 닫는다 (미표시면 no-op — 멱등).
   func dismissSelectionMenu()
 }
