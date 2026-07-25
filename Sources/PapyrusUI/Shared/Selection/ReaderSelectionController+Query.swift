@@ -207,6 +207,58 @@ extension ReaderSelectionController {
     return false
   }
 
+  /// 페이지 표시 변환의 동기 조회 (store memoize 위임 — 미보유면 `nil`).
+  /// - Parameter pageIndex: 조회할 페이지 인덱스.
+  /// - Returns: 표시 변환, 미보유면 `nil`.
+  package func displayTransform(forPage pageIndex: Int) -> CGAffineTransform? {
+    self.store.displayTransform(forPage: pageIndex)
+  }
+
+  // large_tuple 예외: 설계 §2.7이 명시한 반환 시그니처(3필드 페이지별 재료)를 그대로 따른다.
+  // swiftlint:disable large_tuple
+  /// 선택의 페이지별 하이라이트 재료 (표시와 동일한 라인 병합 quad를 페이지 공간으로
+  /// 역변환한 것 + 페이지 UTF-16 구간).
+  ///
+  /// 진입 시점의 `selection` 인자를 스냅숏으로 완주한다 (`selectedString()` 전례 —
+  /// 조립 중 선택이 바뀌어도 결과는 요청 시점 값). 협조적 취소 시 빈 배열(부분 결과
+  /// 미반환). 추출 실패·빈 선택 페이지, 병적(퇴화) 변환 페이지는 조용히 건너뛴다.
+  /// - Parameter selection: 스냅숏할 선택.
+  /// - Returns: 페이지별 (인덱스, 페이지 공간 quad, UTF-16 구간) 목록.
+  package func pageHighlightQuads(
+    for selection: TextSelection
+  ) async -> [(pageIndex: Int, quads: [Quad], range: Range<Int>)] {
+    var results: [(pageIndex: Int, quads: [Quad], range: Range<Int>)] = []
+    for pageIndex in selection.pageRange {
+      if Task.isCancelled {
+        return []
+      }
+      let geometry = await self.store.loadedGeometry(forPage: pageIndex)
+      guard
+        let range = selection.utf16Range(
+          onPage: pageIndex, pageUTF16Length: geometry.content.string.utf16.count
+        ), !range.isEmpty
+      else {
+        continue
+      }
+      let displayQuads = geometry.displayQuads(forRange: range)
+      guard !displayQuads.isEmpty else {
+        continue
+      }
+      guard let transform = self.store.displayTransform(forPage: pageIndex) else {
+        continue
+      }
+      let determinant = transform.a * transform.d - transform.b * transform.c
+      guard abs(determinant) > .ulpOfOne else { // 퇴화 변환 — 역변환 불능 방어.
+        continue
+      }
+      let inverse = transform.inverted()
+      let pageQuads = displayQuads.map { PageDisplayTransform.apply(inverse, to: $0) }
+      results.append((pageIndex, pageQuads, range))
+    }
+    return results
+  }
+  // swiftlint:enable large_tuple
+
   /// 메뉴 앵커 rect (해당 페이지 quad 합집합 boundingRect — 코어가 콘텐츠 공간으로 변환).
   /// - Parameter pageIndex: 조회할 페이지 인덱스.
   /// - Returns: 합집합 사각형, 그 페이지에 quad가 없으면 `nil`.

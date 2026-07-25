@@ -52,10 +52,10 @@ xcodebuild -project PapyrusDemo.xcodeproj -scheme PapyrusDemo_iOS \
 | 파일 | 역할 |
 |---|---|
 | `PapyrusDemoApp.swift` | `@main` 앱 진입점, `WindowGroup` |
-| `ContentView.swift` | `NavigationSplitView`: 사이드바(목차) + 디테일(리더), 열기/생성 툴바 |
+| `ContentView.swift` | `NavigationSplitView`: 사이드바(목차) + 디테일(리더), 열기/생성 툴바, `.papyrusSelectionMenu` 항목(검색·길이 표시·하이라이트 2색·영역 정보) |
 | `DocumentLoader.swift` | `@Observable`: `fileImporter` URL/합성 바이트 → `PapyrusDocument.open`, 경고·에러 상태 |
 | `OutlineSidebar.swift` | `OutlineItem` 트리 → `List`, 탭 시 `model.go(to:)` |
-| `ReaderToolbar.swift` | 페이지 표시("n / N")·페이지 이동 입력·줌 ±·위치 저장/복원(UserDefaults의 `ReaderPosition` JSON) |
+| `ReaderToolbar.swift` | 페이지 표시("n / N")·페이지 이동 입력·줌 ±·위치 저장/복원(UserDefaults의 `ReaderPosition` JSON)·하이라이트 저장/불러오기/전체 제거(UserDefaults의 `[Highlight]` JSON, M14) |
 | `SyntheticPDF.swift` | `CGContext(consumer:mediaBox:_:)` 기반 N페이지 생성기 — 페이지 번호 대형 텍스트 + 100pt 격자(타일 경계 눈검증 겸용) |
 
 `SyntheticPDF`는 `PapyrusTestSupport`(제품 비노출 타겟)를 쓰지 않습니다 — CG의 PDF 그리기
@@ -88,3 +88,20 @@ API에 위임하는 수십 줄짜리 생성기라 데모 앱 자체에 둡니다
 - [ ] 창 크기 조절(macOS)/기기 회전(iOS) 시 같은 내용 위치가 유지된다.
 - [ ] 손상된 PDF(파일 일부를 무작위 바이트로 조작한 뒤 열기)에서: 흰 페이지가 표시되고,
       스크롤은 정상 동작하며, 크래시가 없다.
+
+## 지속 하이라이트 수동 검증 (양 플랫폼, M14 설계 §5 테스트 포인트 7)
+
+- [ ] 텍스트를 드래그 선택 → 선택 메뉴의 **"Highlight (Yellow)"** → 하이라이트가 즉시
+      표시되고 선택이 해제된다(`makeHighlights → addHighlights → clearSelection` 레시피).
+- [ ] 다른 텍스트를 선택 → **"Highlight (Green)"** → 두 색이 같은 페이지에 동시에 표시된다
+      (겹치면 각 색이 자신의 레이어로 채워지고 짙어지지 않는다).
+- [ ] 하이라이트가 있는 페이지를 스크롤로 실체화 창 밖으로 내보냈다가 다시 스크롤해
+      돌아온다 → 잔류·중복 없이 정확히 복원된다.
+- [ ] 핀치(iOS)/매그니피케이션(macOS) 확대·축소 후에도 하이라이트 채움이 선명하게
+      유지된다(래스터 흐림 없음).
+- [ ] 툴바의 **Highlights → Save Highlights** → 문서를 닫고 새 문서(또는
+      "Generate 5,000-Page Document")를 연다 → 새 문서에는 하이라이트가 없다(문서 교체
+      시 소거).
+- [ ] 같은 문서를 다시 열고 **Highlights → Load Highlights** → 저장해 둔 하이라이트가
+      그대로 복원된다(`Codable` JSON 왕복).
+- [ ] **Highlights → Clear Highlights** → 현재 문서의 모든 하이라이트가 제거된다.

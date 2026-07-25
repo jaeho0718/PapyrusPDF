@@ -2,11 +2,14 @@ import Foundation
 import Papyrus
 import SwiftUI
 
-/// 뷰어 상단 툴바: 페이지 표시("n / N")·페이지 이동 입력·줌 ±·위치 저장/복원.
+/// 뷰어 상단 툴바: 페이지 표시("n / N")·페이지 이동 입력·줌 ±·위치 저장/복원·하이라이트
+/// 저장/불러오기/전체 제거(M14).
 ///
 /// `PapyrusReaderModel`은 직접적인 `setZoom` API를 노출하지 않는다(줌은 스크롤 호스트의
 /// 핀치/매그니피케이션이 원천 — ARCHITECTURE 확정). 줌 ± 버튼은 `capturePosition()` →
 /// 배율만 바꾼 `ReaderPosition` → `restore(_:)` 경로로 동일 효과를 낸다(공개 API만 사용).
+/// 하이라이트 생성 자체(색 선택 포함)는 `ContentView`의 선택 메뉴 항목이 담당한다 — 이
+/// 툴바는 등록부 전체의 `Codable` 왕복(저장/불러오기)과 제거만 시연한다.
 struct ReaderToolbar: View {
   /// 대상 뷰어 모델.
   let model: PapyrusReaderModel
@@ -16,6 +19,10 @@ struct ReaderToolbar: View {
 
   /// 위치 저장에 쓰는 `UserDefaults` 키.
   private static let savedPositionKey = "PapyrusDemo.savedReaderPosition"
+
+  /// 하이라이트 저장에 쓰는 `UserDefaults` 키 (M14 — `[Highlight]` JSON 배열, `Codable`
+  /// 왕복 시연용).
+  private static let savedHighlightsKey = "PapyrusDemo.savedHighlights"
 
   /// 줌 버튼 한 번의 배율 변화 (√2 — M5 스케일 버킷 간격과 정합).
   private static let zoomStep: CGFloat = 1.414_213_56
@@ -46,6 +53,14 @@ struct ReaderToolbar: View {
 
       Button("Save Position", action: self.savePosition)
       Button("Restore Position", action: self.restorePosition)
+
+      Menu("Highlights") {
+        Button("Save Highlights", action: self.saveHighlights)
+        Button("Load Highlights", action: self.loadHighlights)
+        Button("Clear Highlights") {
+          self.model.removeAllHighlights()
+        }
+      }
     }
   }
 
@@ -88,5 +103,25 @@ struct ReaderToolbar: View {
       return
     }
     self.model.restore(position)
+  }
+
+  /// 현재 등록된 하이라이트 전체(`model.allHighlights`)를 `UserDefaults`에 JSON으로
+  /// 저장한다 (M14 `Codable` 왕복 시연 — 위치 저장/복원과 동형).
+  private func saveHighlights() {
+    guard let data = try? JSONEncoder().encode(self.model.allHighlights) else {
+      return
+    }
+    UserDefaults.standard.set(data, forKey: Self.savedHighlightsKey)
+  }
+
+  /// `UserDefaults`에 저장된 하이라이트를 불러와 등록한다 (없으면 무시). 같은 `id`는
+  /// 기존 항목을 대체하므로 여러 번 눌러도 안전하다.
+  private func loadHighlights() {
+    guard let data = UserDefaults.standard.data(forKey: Self.savedHighlightsKey),
+      let highlights = try? JSONDecoder().decode([Highlight].self, from: data)
+    else {
+      return
+    }
+    self.model.addHighlights(highlights)
   }
 }

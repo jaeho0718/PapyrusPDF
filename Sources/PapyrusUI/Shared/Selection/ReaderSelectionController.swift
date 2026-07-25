@@ -31,6 +31,10 @@ package final class ReaderSelectionController {
   package var onSelectionChange: ((TextSelection?) -> Void)?
   /// 페이지 오버레이 무효화 (코어가 구독 — 실체화 페이지면 quad·핸들 재적용).
   package var onOverlayInvalidate: ((Int) -> Void)?
+  /// 페이지 콘텐츠(지오메트리+변환) 도착 통지 — 선택 상태와 무관하게 매 도착마다
+  /// 발화한다 (코어가 구독해 지속 하이라이트를 재반영). 기존 `onOverlayInvalidate`와
+  /// 분리한 이유: 그쪽은 "선택 표시가 바뀐 페이지"만 발화하는 선택 전용 계약이다.
+  package var onPageContentReady: ((Int) -> Void)?
   /// 메뉴 표시 요청 (iOS 선택 확정 시 — 코어가 구독해 프레젠터 호출).
   package var onMenuRequest: ((_ contentAnchorPage: Int) -> Void)?
   /// 메뉴 닫기 요청 (드래그 시작·해제 시).
