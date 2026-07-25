@@ -13,6 +13,12 @@ struct ContentView: View {
   /// 합성 문서 생성 진행 중 여부 (버튼 중복 탭 방지).
   @State private var isGeneratingSyntheticDocument = false
 
+  /// 선택 메뉴 커스텀 항목이 남긴 알림 메시지 (M11 `.papyrusSelectionMenu` 데모용).
+  ///
+  /// `nil`이 아니면 알림을 띄운다 — 액션 클로저가 실제로 `selectedText`를 수신·사용하는지
+  /// 눈으로 확인하는 용도다.
+  @State private var selectionNotice: String?
+
   var body: some View {
     NavigationSplitView {
       OutlineSidebar(items: self.loader.outline, model: self.loader.readerModel)
@@ -73,6 +79,24 @@ struct ContentView: View {
     } message: { message in
       Text(message)
     }
+    .alert(
+      "Selection Menu Action",
+      isPresented: Binding(
+        get: { self.selectionNotice != nil },
+        set: { isPresented in
+          if !isPresented {
+            self.selectionNotice = nil
+          }
+        }
+      ),
+      presenting: self.selectionNotice
+    ) { _ in
+      Button("OK") {
+        self.selectionNotice = nil
+      }
+    } message: { message in
+      Text(message)
+    }
   }
 
   /// 디테일 영역: 미열림 안내 / 로딩 중 / 뷰어.
@@ -82,12 +106,43 @@ struct ContentView: View {
       ProgressView("Preparing document…")
     } else if let document = self.loader.document {
       PapyrusReader(document: document, model: self.loader.readerModel)
+        .papyrusSelectionMenu(self.selectionMenuItems)
     } else {
       ContentUnavailableView(
         "No Document Open", systemImage: "doc",
         description: Text("Open a PDF, or generate a 5,000-page synthetic document to profile.")
       )
     }
+  }
+
+  /// M11 선택 메뉴 데모: 커스텀 항목 2개 + 기본 복사. 두 커스텀 액션 모두
+  /// `TextSelectionContext.selectedText`를 실제로 수신·사용해, `.papyrusSelectionMenu`가
+  /// 항목마다 액션 실행 시점의 선택 컨텍스트를 정확히 전달하는지 눈으로 확인할 수 있다.
+  /// - Parameter context: 선택 컨텍스트 (0.2.0 기준 `.text`만 존재).
+  /// - Returns: 표시할 메뉴 항목 (커스텀 2개 + `.copy`).
+  private func selectionMenuItems(for context: SelectionContext) -> [SelectionMenuItem] {
+    guard case .text = context else {
+      return []
+    }
+    return [
+      SelectionMenuItem(title: "Search Selection", systemImage: "magnifyingglass") { context in
+        guard case let .text(textContext) = context else {
+          return
+        }
+        // 기존 검색 바 배선(`PapyrusReaderModel.search(_:)`)을 그대로 재사용한다 — 매치
+        // 하이라이트·카운트가 갱신되면 selectedText가 그대로 검색에 쓰였다는 뜻이다.
+        self.loader.readerModel.search(textContext.selectedText)
+      },
+      SelectionMenuItem(title: "Show Length", systemImage: "textformat.size") { context in
+        guard case let .text(textContext) = context else {
+          return
+        }
+        let text = textContext.selectedText
+        let preview = text.count > 40 ? "\(text.prefix(40))…" : text
+        self.selectionNotice = "\(text.count) characters selected: “\(preview)”"
+      },
+      .copy
+    ]
   }
 
   /// "5,000페이지 생성" 메뉴 동작 — `SyntheticPDF`로 즉석 생성 후 연다.
