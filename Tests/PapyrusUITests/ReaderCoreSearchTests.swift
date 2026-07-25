@@ -221,7 +221,7 @@ struct ReaderCoreSearchTests {
     let model = PapyrusReaderModel()
 
     model.search("needle") // 보류.
-    model.beginLoading() // 보류 폐기 + idle 리셋.
+    model.beginLoading(documentID: ObjectIdentifier(core)) // 보류 폐기 + idle 리셋.
     model.attach(core: core)
 
     try await Task.sleep(for: .milliseconds(200))

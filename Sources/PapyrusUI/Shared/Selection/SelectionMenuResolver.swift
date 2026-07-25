@@ -30,6 +30,8 @@ enum SelectionMenuResolver {
     switch context {
     case .text:
       return [.copy]
+    case .region:
+      return []
     }
   }
 }

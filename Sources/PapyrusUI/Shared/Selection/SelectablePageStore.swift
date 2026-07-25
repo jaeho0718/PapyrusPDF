@@ -112,6 +112,16 @@ package final class ReaderSelectablePageStore {
     return (try? await self.provider.textContent(forPage: pageIndex))?.string ?? ""
   }
 
+  /// 페이지 표시 변환의 동기 조회 (memoize 캐시 전용 — 미보유면 `nil`, 로드는 시작하지
+  /// 않는다). 변환 캐시는 창 퇴거 대상이 아니다 — 세션 수명 동안 단조 증가(페이지당
+  /// 48바이트, 5,000페이지 240KB 유계). `invalidateAll`도 변환을 남긴다 — 변환은 문서
+  /// 기하의 순수 함수라 세대와 무관하게 유효하기 때문이다.
+  /// - Parameter pageIndex: 조회할 페이지 인덱스.
+  /// - Returns: 캐시된 표시 변환, 미보유면 `nil`.
+  package func displayTransform(forPage pageIndex: Int) -> CGAffineTransform? {
+    self.transformCache[pageIndex]
+  }
+
   /// 전부 무효화: 세대 증가, 인플라이트 취소, 캐시 비움 (teardown 경로).
   package func invalidateAll() {
     self.generation += 1

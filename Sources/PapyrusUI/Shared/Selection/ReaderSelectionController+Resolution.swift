@@ -18,6 +18,11 @@ extension ReaderSelectionController {
       self.applyContentArrived(pageIndex, toDraggingSession: &session)
     case var .selected(selected):
       self.applyContentArrived(pageIndex, toSelectedState: &selected)
+    case let .regionSelected(region): // T33 — 창 재진입 시 오버레이 복원.
+      guard pageIndex == region.pageIndex else {
+        return
+      }
+      self.onOverlayInvalidate?(pageIndex)
     }
   }
 

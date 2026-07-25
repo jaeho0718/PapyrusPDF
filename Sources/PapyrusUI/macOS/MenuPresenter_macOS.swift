@@ -56,18 +56,34 @@ enum MacMenuBuilder {
 
 /// `ReaderScrollHostView`(macOS)의 `ReaderMenuPresenting` 채택.
 ///
-/// macOS는 pull형(우클릭 시 `menu(for:)`가 직접 질의)이라 push 표면인
-/// `presentSelectionMenu`는 호출되지 않는다(`SelectionStyle.presentsMenuOnSelectionEnd ==
-/// false`가 코어의 호출 자체를 막는다) — 프로토콜 충족을 위한 no-op으로 명시한다.
-/// `NSMenu`는 모달 팝업이라 `dismissSelectionMenu`도 no-op이다.
+/// 텍스트 선택은 계속 pull형(우클릭 시 `menu(for:)`가 직접 질의)이라 이 표면으로
+/// 들어오지 않는다. 영역 선택은 양 플랫폼 모두 push라(§0.2-4) macOS에서도 이 표면이
+/// 실호출된다 — `NSMenu.popUp`으로 구현한다(M11 계약 ② 개정판).
 extension ReaderScrollHostView: ReaderMenuPresenting {
-  /// no-op (macOS는 pull형 — 코어가 호출하지 않는다).
+  /// 영역 선택의 즉시 메뉴를 `NSMenu.popUp`으로 앵커 rect 아래에 표시한다.
+  ///
+  /// `FlippedDocumentView`는 y-아래 flipped이므로 `contentRect.maxY`가 시각적
+  /// 아래변이다 — 메뉴가 영역 아래에 뜬다. `popUp`은 자체 트래킹 루프를 도는 메인 액터
+  /// 동기 호출이다 — 바깥 클릭 시 자동 닫히며, 닫힌 뒤에도 영역 선택은 유지된다(해제는
+  /// 다음 탭).
   /// - Parameters:
-  ///   - items: 미사용.
-  ///   - contentRect: 미사용.
-  func presentSelectionMenu(_ items: [ResolvedMenuItem], around contentRect: CGRect) {}
+  ///   - items: 표시할 메뉴 항목.
+  ///   - contentRect: 앵커 사각형 (콘텐츠 공간).
+  func presentSelectionMenu(_ items: [ResolvedMenuItem], around contentRect: CGRect) {
+    let built = MacMenuBuilder.makeMenu(for: items)
+    self.menuActionBridges = built.bridges
+    self.presentedMenu = built.menu
+    built.menu.popUp(
+      positioning: nil,
+      at: CGPoint(x: contentRect.minX, y: contentRect.maxY),
+      in: self.documentView
+    )
+  }
 
-  /// no-op (`NSMenu`는 모달 팝업이라 프로그램적으로 닫을 표면이 없다).
-  func dismissSelectionMenu() {}
+  /// 표시 중 popUp 메뉴를 닫는다 (미표시면 no-op — 멱등 계약 유지).
+  func dismissSelectionMenu() {
+    self.presentedMenu?.cancelTracking()
+    self.presentedMenu = nil
+  }
 }
 #endif

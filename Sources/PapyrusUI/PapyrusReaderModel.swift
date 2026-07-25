@@ -96,8 +96,20 @@ public final class PapyrusReaderModel {
   /// 현재 텍스트 선택입니다 (없으면 `nil`). 드래그 중에도 실시간으로 갱신됩니다.
   public private(set) var selection: TextSelection?
 
+  /// 현재 선택된 영역입니다 (없으면 `nil`). 탭으로 선택되며, 텍스트 선택과 상호
+  /// 배타입니다 — 텍스트 드래그가 시작되면 해제됩니다.
+  public private(set) var selectedRegion: SelectableRegion?
+
   /// 연결된 코어 (연결 전 `nil`).
   private var core: ReaderCore?
+
+  /// 선택 가능 영역 등록부입니다 (진실 원천 — 컨트롤러는 attach 시 재생되는 작업
+  /// 사본을 보관합니다). 같은 문서의 재조립에서는 유지되고, 다른 문서로 바뀔 때만
+  /// 리셋됩니다.
+  private var regionsByPage: [Int: [SelectableRegion]] = [:]
+
+  /// 마지막으로 적재를 시작한 문서의 신원 (문서 교체 판정용).
+  private var lastDocumentID: ObjectIdentifier?
 
   /// 연결 전 접수되어 연결 직후 재생될 탐색 명령 (최신 것만 유지).
   private var pendingCommand: PendingReaderCommand?
@@ -196,7 +208,7 @@ public final class PapyrusReaderModel {
     self.core?.advanceMatch(by: -1)
   }
 
-  /// 선택을 해제합니다 (선택 메뉴도 닫힙니다).
+  /// 선택을 해제합니다 (선택 메뉴도 닫힙니다). 영역 선택도 해제됩니다.
   public func clearSelection() {
     self.pendingSelection = nil
     self.core?.clearSelection()
@@ -223,11 +235,50 @@ public final class PapyrusReaderModel {
     return await core.selectedString()
   }
 
+  /// 페이지의 선택 가능 영역을 등록합니다 (그 페이지의 기존 등록을 대체합니다).
+  ///
+  /// 좌표가 유한하지 않거나 `pageIndex`가 일치하지 않는 항목은 제외되며, 페이지당
+  /// 등록 수는 내부 상한에서 잘립니다. 겹치는 영역은 나중에 등록된(배열 뒤쪽) 항목이
+  /// 우선합니다. 적재 전 호출해도 안전합니다 — 적재 완료 시 자동 반영됩니다. 빈 배열을
+  /// 전달하면 그 페이지의 등록을 해제합니다.
+  /// - Parameters:
+  ///   - regions: 등록할 영역 목록입니다 (겹침 우선순위 = 배열 순서).
+  ///   - pageIndex: 대상 페이지 인덱스입니다 (0 기반).
+  public func setSelectableRegions(_ regions: [SelectableRegion], forPage pageIndex: Int) {
+    let sanitized = RegionHitTester.sanitized(regions, forPage: pageIndex)
+    if sanitized.isEmpty {
+      self.regionsByPage.removeValue(forKey: pageIndex)
+    } else {
+      self.regionsByPage[pageIndex] = sanitized
+    }
+    self.core?.setSelectableRegions(sanitized, forPage: pageIndex)
+  }
+
+  /// 페이지에 등록된 선택 가능 영역입니다 (등록 위생 적용 후 실제 활성 목록).
+  /// - Parameter pageIndex: 조회할 페이지 인덱스입니다.
+  /// - Returns: 등록 순서의 영역 목록입니다 (없으면 빈 배열).
+  public func selectableRegions(forPage pageIndex: Int) -> [SelectableRegion] {
+    self.regionsByPage[pageIndex] ?? []
+  }
+
+  /// 모든 페이지의 선택 가능 영역 등록을 해제합니다 (선택 중인 영역도 해제됩니다).
+  public func clearSelectableRegions() {
+    self.regionsByPage.removeAll()
+    self.core?.clearSelectableRegions()
+  }
+
   /// 새 조립 시작을 반영한다 (`ReaderSession` 전용 — 문서 교체 시 이전 코어 연결 해제).
-  func beginLoading() {
+  ///
+  /// 영역 등록부는 `documentID`가 직전 적재와 같으면(같은 문서 재조립) 유지되고,
+  /// 다르면 리셋된다 — `pendingSearch`/`pendingSelection`과 달리 일시 상태가 아니라
+  /// 개발자 소유 영속 데이터이기 때문이다. `selectedRegion`은 일시 상태이므로 항상
+  /// `nil`로 리셋된다.
+  /// - Parameter documentID: 새로 적재할 문서의 신원.
+  func beginLoading(documentID: ObjectIdentifier) {
     self.core?.onStateChange = nil
     self.core?.onSearchStateChange = nil
     self.core?.onSelectionChange = nil
+    self.core?.onRegionSelectionChange = nil
     self.core = nil
     self.loadState = .loading
     self.pageCount = 0
@@ -236,11 +287,22 @@ public final class PapyrusReaderModel {
     self.zoomScale = 1
     self.searchState = .idle
     self.selection = nil
+    self.selectedRegion = nil
     self.pendingSearch = nil
     self.pendingSelection = nil
+    // `lastDocumentID == nil`은 "아직 문서를 적재한 적 없음"이다 — 최초 적재는 비교
+    // 대상이 없으므로 문서 "교체"가 아니다. 적재 전에 등록한 영역이 최초 적재에서
+    // 지워지면 안 되므로, 리셋은 직전 문서가 실제로 존재하고 다를 때만 수행한다.
+    if let lastDocumentID = self.lastDocumentID, lastDocumentID != documentID {
+      self.regionsByPage.removeAll()
+    }
+    self.lastDocumentID = documentID
   }
 
-  /// 코어에 연결하고 보류된 명령·검색·선택을 1회 재생한다 (`ReaderSession` 전용).
+  /// 코어에 연결하고 등록부·보류된 명령·검색·선택을 1회 재생한다 (`ReaderSession` 전용).
+  ///
+  /// 영역 등록부 재생을 `replayPendingSelection()`보다 먼저 수행한다 — 프로그램적
+  /// `select(_:)`가 재생되기 전에 영역 등록이 끝나 있어야 상호 배타 판정이 결정적이다.
   /// - Parameter core: 연결할 코어.
   func attach(core: ReaderCore) {
     self.core = core
@@ -254,9 +316,13 @@ public final class PapyrusReaderModel {
     core.onSelectionChange = { [weak self] selection in
       self?.selection = selection
     }
+    core.onRegionSelectionChange = { [weak self] region in
+      self?.selectedRegion = region
+    }
     self.loadState = .ready
     self.replayPendingCommand()
     self.replayPendingSearch()
+    self.replayRegions()
     self.replayPendingSelection()
   }
 
@@ -265,6 +331,7 @@ public final class PapyrusReaderModel {
     self.core?.onStateChange = nil
     self.core?.onSearchStateChange = nil
     self.core?.onSelectionChange = nil
+    self.core?.onRegionSelectionChange = nil
     self.core = nil
   }
 
@@ -312,5 +379,15 @@ public final class PapyrusReaderModel {
     }
     self.pendingSelection = nil
     self.select(pending)
+  }
+
+  /// 등록부 전 페이지를 코어에 재생한다 (연결 직후 1회 — 적재 전 등록 지원).
+  private func replayRegions() {
+    guard let core else {
+      return
+    }
+    for (pageIndex, regions) in self.regionsByPage {
+      core.setSelectableRegions(regions, forPage: pageIndex)
+    }
   }
 }

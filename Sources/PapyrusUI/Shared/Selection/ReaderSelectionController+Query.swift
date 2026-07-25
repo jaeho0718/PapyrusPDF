@@ -8,9 +8,18 @@ import PapyrusCore
 
 extension ReaderSelectionController {
   /// 페이지의 표시 공간 선택 quad (라인 병합 적용 — 캐시 미보유·선택 밖 페이지는 빈 배열).
+  ///
+  /// 영역 선택 중이고 그 페이지가 선택된 영역의 페이지면 변환된 영역 quad 1개를
+  /// 반환한다 (변환 미보유는 방어적으로 빈 배열 — 선택 성립 시점에 존재가 보장된다).
   /// - Parameter pageIndex: 조회할 페이지 인덱스.
   /// - Returns: 표시 공간 quad 목록.
   package func displayQuads(forPage pageIndex: Int) -> [Quad] {
+    if case let .regionSelected(region) = self.state, region.pageIndex == pageIndex {
+      guard let transform = self.store.displayTransform(forPage: pageIndex) else {
+        return []
+      }
+      return [PageDisplayTransform.apply(transform, to: region.quad)]
+    }
     guard let selection = self.selection, selection.pageRange.contains(pageIndex),
       let geometry = self.store.geometry(forPage: pageIndex)
     else {

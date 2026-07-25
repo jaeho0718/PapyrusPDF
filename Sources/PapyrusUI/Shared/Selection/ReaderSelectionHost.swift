@@ -89,16 +89,21 @@ package protocol ReaderSelectionEventSink: AnyObject {
   ///   - point: 콘텐츠 공간의 시작 점.
   func hostSelectionHandleDragBegan(_ handle: SelectionHandle, atContentPoint point: CGPoint)
 
-  /// 탭/클릭 — 현재는 선택 해제만 수행한다 (영역 히트는 향후 지원 예정).
+  /// 탭/클릭 — 영역 히트 판정 후 선택/해제한다 (§3 전이표 T4′/T20′/T27).
   /// - Parameter point: 콘텐츠 공간의 탭 점.
   func hostTap(atContentPoint point: CGPoint)
 
   /// ⌘C·메뉴 복사.
   func hostCopyCommand()
 
-  /// 선택 존재 여부 (⌘C validate·메뉴 재표시 판단).
-  /// - Returns: 선택이 있으면 `true`.
+  /// 활성 선택(텍스트 또는 영역) 존재 여부 (메뉴 재표시 판단).
+  /// - Returns: 활성 선택이 있으면 `true`.
   func hostHasSelection() -> Bool
+
+  /// 복사 가능 여부 (⌘C·Copy 메뉴 validate 전용) — 텍스트 선택 존재. 영역 선택은 복사할
+  /// 텍스트가 없어 `false`다.
+  /// - Returns: 복사 가능하면 `true`.
+  func hostCanCopy() -> Bool
 
   /// 우클릭 지점의 컨텍스트 메뉴 항목 (선택 밖·선택 없음이면 빈 배열 — macOS pull 표면).
   /// - Parameter point: 콘텐츠 공간의 우클릭 점.
@@ -111,8 +116,10 @@ package protocol ReaderSelectionEventSink: AnyObject {
 /// 계약 3항:
 /// 1. `contentRect`는 콘텐츠 공간(줌 미적용, `visibleContentRect`와 동축)이다 — 뷰 좌표
 ///    변환은 호스트 책임이다 (iOS는 documentView 좌표 = 콘텐츠 공간이라 무변환).
-/// 2. push 표면(`presentSelectionMenu`)은 `SelectionStyle.presentsMenuOnSelectionEnd ==
-///    true` 플랫폼에서만 호출된다 (macOS에서는 호출되지 않으므로 no-op 구현이 적법하다).
+/// 2. push 표면(`presentSelectionMenu`)은 (a) 텍스트 선택 확정 —
+///    `SelectionStyle.presentsMenuOnSelectionEnd == true` 플랫폼(iOS)에서만, (b) 영역
+///    선택 — 양 플랫폼 모두 호출된다. macOS 구현은 영역 메뉴를 위해 실동작해야 한다
+///    (더 이상 no-op 적법이 아니다).
 /// 3. `dismissSelectionMenu`는 멱등이다 — 이미 닫힌 상태에서 호출해도 안전하다.
 @MainActor
 package protocol ReaderMenuPresenting: AnyObject {

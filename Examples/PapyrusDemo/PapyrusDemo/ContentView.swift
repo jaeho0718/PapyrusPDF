@@ -115,34 +115,47 @@ struct ContentView: View {
     }
   }
 
-  /// M11 선택 메뉴 데모: 커스텀 항목 2개 + 기본 복사. 두 커스텀 액션 모두
-  /// `TextSelectionContext.selectedText`를 실제로 수신·사용해, `.papyrusSelectionMenu`가
-  /// 항목마다 액션 실행 시점의 선택 컨텍스트를 정확히 전달하는지 눈으로 확인할 수 있다.
-  /// - Parameter context: 선택 컨텍스트 (0.2.0 기준 `.text`만 존재).
-  /// - Returns: 표시할 메뉴 항목 (커스텀 2개 + `.copy`).
+  /// M11/M12 선택 메뉴 데모: 텍스트 선택엔 커스텀 항목 2개 + 기본 복사, 영역
+  /// 선택(``SelectableRegion``, 페이지 0에 등록됨)엔 metadata를 표시하는 커스텀 항목
+  /// 1개를 반환한다. 액션은 모두 액션 실행 시점의 선택 컨텍스트를 실제로 수신·사용해,
+  /// `.papyrusSelectionMenu`가 항목마다 정확한 컨텍스트를 전달하는지 눈으로 확인할 수
+  /// 있다.
+  /// - Parameter context: 선택 컨텍스트 (`.text` 또는 `.region`).
+  /// - Returns: 표시할 메뉴 항목.
   private func selectionMenuItems(for context: SelectionContext) -> [SelectionMenuItem] {
-    guard case .text = context else {
-      return []
+    switch context {
+    case .text:
+      return [
+        SelectionMenuItem(title: "Search Selection", systemImage: "magnifyingglass") { context in
+          guard case let .text(textContext) = context else {
+            return
+          }
+          // 기존 검색 바 배선(`PapyrusReaderModel.search(_:)`)을 그대로 재사용한다 — 매치
+          // 하이라이트·카운트가 갱신되면 selectedText가 그대로 검색에 쓰였다는 뜻이다.
+          self.loader.readerModel.search(textContext.selectedText)
+        },
+        SelectionMenuItem(title: "Show Length", systemImage: "textformat.size") { context in
+          guard case let .text(textContext) = context else {
+            return
+          }
+          let text = textContext.selectedText
+          let preview = text.count > 40 ? "\(text.prefix(40))…" : text
+          self.selectionNotice = "\(text.count) characters selected: “\(preview)”"
+        },
+        .copy
+      ]
+    case .region:
+      return [
+        SelectionMenuItem(title: "Show Region Info", systemImage: "info.circle") { context in
+          guard case let .region(region) = context else {
+            return
+          }
+          // 등록 시 넣은 `FigureInfo`로 캐스팅한다 — M12 metadata 왕복 데모.
+          let caption = (region.metadata as? FigureInfo)?.caption ?? "(no metadata)"
+          self.selectionNotice = "Region “\(region.id)” on page \(region.pageIndex + 1): \(caption)"
+        }
+      ]
     }
-    return [
-      SelectionMenuItem(title: "Search Selection", systemImage: "magnifyingglass") { context in
-        guard case let .text(textContext) = context else {
-          return
-        }
-        // 기존 검색 바 배선(`PapyrusReaderModel.search(_:)`)을 그대로 재사용한다 — 매치
-        // 하이라이트·카운트가 갱신되면 selectedText가 그대로 검색에 쓰였다는 뜻이다.
-        self.loader.readerModel.search(textContext.selectedText)
-      },
-      SelectionMenuItem(title: "Show Length", systemImage: "textformat.size") { context in
-        guard case let .text(textContext) = context else {
-          return
-        }
-        let text = textContext.selectedText
-        let preview = text.count > 40 ? "\(text.prefix(40))…" : text
-        self.selectionNotice = "\(text.count) characters selected: “\(preview)”"
-      },
-      .copy
-    ]
   }
 
   /// "5,000페이지 생성" 메뉴 동작 — `SyntheticPDF`로 즉석 생성 후 연다.

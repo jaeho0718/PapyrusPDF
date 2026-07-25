@@ -84,6 +84,9 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 선택 변경 통지 (모델이 구독).
   package var onSelectionChange: ((TextSelection?) -> Void)?
 
+  /// 영역 선택 변경 통지 (모델이 구독).
+  package var onRegionSelectionChange: ((SelectableRegion?) -> Void)?
+
   /// 공개 선택 메뉴 빌더 (`View.papyrusSelectionMenu(_:)` → Environment 전파 종점).
   ///
   /// 환경 변화 → body 재평가 → 대입으로 반영된다. 표시 중인 메뉴에는 소급 적용하지
@@ -142,6 +145,9 @@ package final class ReaderCore: ReaderHostEventSink {
     selectionController?.onSelectionChange = { [weak self] selection in
       self?.onSelectionChange?(selection)
       self?.updateMenuTextCache(for: selection)
+    }
+    selectionController?.onRegionSelectionChange = { [weak self] region in
+      self?.onRegionSelectionChange?(region)
     }
     selectionController?.onOverlayInvalidate = { [weak self] pageIndex in
       self?.applySelection(toPage: pageIndex)

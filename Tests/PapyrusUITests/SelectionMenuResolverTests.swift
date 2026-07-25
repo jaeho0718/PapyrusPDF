@@ -26,6 +26,15 @@ struct SelectionMenuResolverTests {
     )
   }
 
+  /// 결정적 영역 선택 컨텍스트를 만든다.
+  private static func makeRegionContext(id: String = "r1") -> SelectionContext {
+    .region(
+      SelectableRegion(
+        id: id, pageIndex: 0, quad: Quad(rect: CGRect(x: 0, y: 0, width: 10, height: 10))
+      )
+    )
+  }
+
   // MARK: 빌더 nil — 기본 폴백
 
   @Test func resolveWithNilBuilderReturnsDefaultCopyItem() {
@@ -34,6 +43,12 @@ struct SelectionMenuResolverTests {
     #expect(items.count == 1)
     #expect(items.first?.title == "Copy")
     #expect(items.first?.systemImage == "doc.on.doc")
+  }
+
+  @Test func resolveRegionContextWithNilBuilderReturnsEmptyDefault() {
+    let items = SelectionMenuResolver.resolve(context: Self.makeRegionContext(), builder: nil)
+
+    #expect(items.isEmpty) // 계획 §3.2 확정 — 영역 기본 메뉴는 없다.
   }
 
   // MARK: 커스텀 빌더 — 순서·title·systemImage 보존
@@ -56,6 +71,20 @@ struct SelectionMenuResolverTests {
     #expect(items[2].systemImage == nil)
   }
 
+  @Test func resolveRegionContextWithCustomBuilderPreservesItems() {
+    let builder: SelectionMenuItemsBuilder = { context in
+      guard case .region = context else {
+        return []
+      }
+      return [SelectionMenuItem(title: "Show Caption", systemImage: "text.bubble") { _ in }]
+    }
+
+    let items = SelectionMenuResolver.resolve(context: Self.makeRegionContext(), builder: builder)
+
+    #expect(items.map(\.title) == ["Show Caption"])
+    #expect(items.first?.systemImage == "text.bubble")
+  }
+
   // MARK: 빈 배열 — 명시적 억제
 
   @Test func resolveWithBuilderReturningEmptyArrayYieldsNoItems() {
@@ -66,7 +95,7 @@ struct SelectionMenuResolverTests {
     #expect(items.isEmpty)
   }
 
-  // MARK: 65개 반환 — 64개 절단
+  // MARK: 65개 반환 — 64개 절단 (텍스트·영역 공통)
 
   @Test func resolveTruncatesBuilderOutputToMaxItems() {
     let builder: SelectionMenuItemsBuilder = { _ in
@@ -78,6 +107,19 @@ struct SelectionMenuResolverTests {
     let items = SelectionMenuResolver.resolve(context: Self.makeTextContext(), builder: builder)
 
     #expect(items.count == SelectionMenuResolver.maxItems)
+    #expect(items.count == 64)
+    #expect(items.last?.title == "Item 63")
+  }
+
+  @Test func resolveTruncatesRegionBuilderOutputToMaxItemsToo() {
+    let builder: SelectionMenuItemsBuilder = { _ in
+      (0..<65).map { index in
+        SelectionMenuItem(title: "Item \(index)") { _ in }
+      }
+    }
+
+    let items = SelectionMenuResolver.resolve(context: Self.makeRegionContext(), builder: builder)
+
     #expect(items.count == 64)
     #expect(items.last?.title == "Item 63")
   }
@@ -124,6 +166,30 @@ struct SelectionMenuResolverTests {
       return
     }
     #expect(readBack == textContext.selectedText)
+  }
+
+  @Test func copyItemActionIsNoOpForRegionContext() {
+    let sentinel = "sentinel-\(UUID().uuidString)"
+    PlatformPasteboard.setString(sentinel)
+    let region = SelectableRegion(
+      id: "r1", pageIndex: 0, quad: Quad(rect: CGRect(x: 0, y: 0, width: 10, height: 10))
+    )
+    let items = SelectionMenuResolver.resolve(context: .region(region), builder: nil)
+
+    // defaultItems(.region) == [] — 기본 메뉴는 항목이 없다. `.copy`가 명시적으로 커스텀
+    // 빌더에 포함됐을 때만 실행 가능하며, region 컨텍스트에서는 no-op이어야 한다.
+    #expect(items.isEmpty)
+    let copyItems = SelectionMenuResolver.resolve(
+      context: .region(region), builder: { _ in [.copy] }
+    )
+    copyItems.first?.action()
+
+    #if canImport(AppKit)
+    let readBack = NSPasteboard.general.string(forType: .string)
+    #elseif canImport(UIKit)
+    let readBack = UIPasteboard.general.string
+    #endif
+    #expect(readBack == sentinel) // 페이스트보드가 바뀌지 않았다 — region no-op.
   }
 
   // MARK: Environment 키 — 기본값·대입 (뷰 트리 없이, 설계 §6-2)

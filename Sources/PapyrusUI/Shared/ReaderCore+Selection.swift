@@ -78,10 +78,13 @@ extension ReaderCore: ReaderSelectionEventSink {
     self.selectionController?.handleDragBegan(handle, at: pagePoint)
   }
 
-  /// 탭/클릭 — 현재는 선택 해제만 수행한다(영역 히트는 아직 지원하지 않는다).
-  /// - Parameter point: 콘텐츠 공간의 탭 점 (현재 구현은 이 값을 사용하지 않는다).
+  /// 탭/클릭 — 영역 히트 판정 후 선택/해제한다 (§3 전이표 T4′/T20′/T27).
+  /// - Parameter point: 콘텐츠 공간의 탭 점.
   package func hostTap(atContentPoint point: CGPoint) {
-    self.selectionController?.tap()
+    guard let pagePoint = self.pagePoint(forContentPoint: point) else {
+      return
+    }
+    self.selectionController?.tap(at: pagePoint)
   }
 
   /// ⌘C·메뉴 복사.
@@ -91,32 +94,49 @@ extension ReaderCore: ReaderSelectionEventSink {
     }
   }
 
-  /// 선택 존재 여부.
-  /// - Returns: 선택이 있으면 `true`.
+  /// 활성 선택(텍스트 또는 영역) 존재 여부.
+  /// - Returns: 활성 선택이 있으면 `true`.
   package func hostHasSelection() -> Bool {
+    self.selectionController?.activeSelection != nil
+  }
+
+  /// 복사 가능 여부 (⌘C·Copy validate 전용) — 텍스트 선택 존재. 영역 선택은 복사할
+  /// 텍스트가 없어 `false`다.
+  /// - Returns: 복사 가능하면 `true`.
+  package func hostCanCopy() -> Bool {
     self.selectionController?.selection != nil
   }
 
   /// 우클릭 지점의 컨텍스트 메뉴 항목 (선택 밖·선택 없음이면 빈 배열) — macOS pull 표면.
   ///
-  /// 해소 문자열은 프리페치 캐시(§4.5)에서 동기로 얻는다: 캐시 적중 시 그 값, 미스면
-  /// 캐시 전용 재조립 폴백, 그래도 실패하면 빈 문자열로 진행한다.
+  /// ① 텍스트 선택이 있고 우클릭 점이 그 quad 안이면 텍스트 컨텍스트를 반환한다.
+  /// ② 텍스트 미히트면 그 점의 영역 히트를 질의한다 — 히트하면 그 영역을 선택(오버레이
+  /// 표시)한 뒤 영역 컨텍스트를 반환한다(우클릭도 선택하는 macOS 관례). 이 경로는
+  /// `onMenuRequest`를 발화하지 않는다 — 반환 메뉴를 호출측(`menu(for:)`)이 곧장
+  /// 표시하므로 push 경로와 겹치면 메뉴가 2회 뜬다. ③ 둘 다 미히트면 빈 배열이다.
+  ///
+  /// 텍스트 해소 문자열은 프리페치 캐시(§4.5)에서 동기로 얻는다: 캐시 적중 시 그 값,
+  /// 미스면 캐시 전용 재조립 폴백, 그래도 실패하면 빈 문자열로 진행한다.
   /// - Parameter point: 콘텐츠 공간의 우클릭 점.
   /// - Returns: 해소된 메뉴 항목 목록.
   package func hostContextMenuItems(atContentPoint point: CGPoint) -> [ResolvedMenuItem] {
-    guard let selectionController, let selection = selectionController.selection,
-      let pagePoint = self.pagePoint(forContentPoint: point)
-    else {
+    guard let selectionController, let pagePoint = self.pagePoint(forContentPoint: point) else {
       return []
     }
-    let quads = selectionController.displayQuads(forPage: pagePoint.pageIndex)
-    guard quads.contains(where: { $0.boundingRect.contains(pagePoint.point) }) else {
+    if let selection = selectionController.selection {
+      let quads = selectionController.displayQuads(forPage: pagePoint.pageIndex)
+      if quads.contains(where: { $0.boundingRect.contains(pagePoint.point) }) {
+        let text = self.cachedMenuText(for: selection)
+        let context = SelectionContext.text(
+          TextSelectionContext(selection: selection, selectedText: text)
+        )
+        return SelectionMenuResolver.resolve(context: context, builder: self.selectionMenuBuilder)
+      }
+    }
+    guard let region = selectionController.selectRegionForContextMenu(at: pagePoint) else {
       return []
     }
-    let text = self.cachedMenuText(for: selection)
-    let context = SelectionContext.text(
-      TextSelectionContext(selection: selection, selectedText: text)
-    )
+    let context = SelectionContext.region(region)
     return SelectionMenuResolver.resolve(context: context, builder: self.selectionMenuBuilder)
   }
 }
@@ -141,20 +161,30 @@ extension ReaderCore {
     }
   }
 
-  /// 확정 선택 주변에 해소된 메뉴를 표시한다 (iOS push 표면) — 문자열 해소 중 선택이
-  /// 바뀌면(드래그 재시작·해제·프로그램 select) 표시를 중단한다(스테일 메뉴 방지).
+  /// 확정 선택(텍스트 또는 영역) 주변에 해소된 메뉴를 표시한다 (push 표면 — iOS는
+  /// 텍스트·영역 모두, macOS는 영역만) — 문자열 해소 중 선택이 바뀌면(드래그 재시작·
+  /// 해제·프로그램 select·다른 영역 탭) 표시를 중단한다(스테일 메뉴 방지).
   /// - Parameter anchorPage: 메뉴 앵커 기준 페이지.
   func presentResolvedMenu(anchorPage: Int) async {
-    guard let selectionController, let selection = selectionController.selection else {
+    guard let selectionController, let active = selectionController.activeSelection else {
       return
     }
-    let text = await self.menuText(for: selection)
-    guard selectionController.selection == selection else {
-      return
+    let context: SelectionContext
+    switch active {
+    case let .text(selection):
+      let text = await self.menuText(for: selection)
+      guard selectionController.selection == selection else { // 기존 스테일 검사.
+        return
+      }
+      context = .text(TextSelectionContext(selection: selection, selectedText: text))
+    case let .region(region):
+      // await 없는 경로지만 onMenuRequest → Task 사이 상태 변화(연속 탭)를 방어한다.
+      let key = RegionKey(pageIndex: region.pageIndex, id: region.id)
+      guard selectionController.isRegionSelected(key) else {
+        return
+      }
+      context = .region(region)
     }
-    let context = SelectionContext.text(
-      TextSelectionContext(selection: selection, selectedText: text)
-    )
     let items = SelectionMenuResolver.resolve(
       context: context, builder: self.selectionMenuBuilder
     )
@@ -251,5 +281,28 @@ extension ReaderCore {
       return nil
     }
     return await selectionController.selectedString()
+  }
+
+  /// 페이지의 선택 가능 영역 등록을 대체한다.
+  /// - Parameters:
+  ///   - regions: 위생 처리된 등록 목록.
+  ///   - pageIndex: 등록 대상 페이지.
+  package func setSelectableRegions(_ regions: [SelectableRegion], forPage pageIndex: Int) {
+    self.selectionController?.setRegions(regions, forPage: pageIndex)
+  }
+
+  /// 모든 페이지의 선택 가능 영역 등록을 해제한다.
+  package func clearSelectableRegions() {
+    self.selectionController?.clearAllRegions()
+  }
+
+  /// 현재 선택된 영역 스냅숏 (attach 직후 모델 동기화용).
+  /// - Returns: 활성 영역 선택, 없으면 `nil`.
+  package func selectedRegionSnapshot() -> SelectableRegion? {
+    guard let active = self.selectionController?.activeSelection, case let .region(region) = active
+    else {
+      return nil
+    }
+    return region
   }
 }

@@ -79,7 +79,7 @@ final class ReaderSession {
   ///   - pixelScale: 렌더 서비스에 고정할 화면 배율.
   func assemble(document: PapyrusDocument, model: PapyrusReaderModel, pixelScale: CGFloat) {
     self.tearDown()
-    model.beginLoading()
+    model.beginLoading(documentID: ObjectIdentifier(document))
     self.assembleTask = Task { [weak self] in
       do {
         let snapshot = try await document.core.pageTree()

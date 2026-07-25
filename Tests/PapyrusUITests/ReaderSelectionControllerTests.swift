@@ -38,7 +38,7 @@ struct ReaderSelectionControllerTests {
     let recorder = SelectionCallbackRecorder()
     recorder.attach(to: controller)
 
-    controller.tap()
+    controller.tap(at: SelectionTestFixtures.pagePoint(0))
 
     #expect(recorder.selectionChanges.isEmpty)
     #expect(recorder.menuDismissCount == 0)
@@ -226,7 +226,8 @@ struct ReaderSelectionControllerTests {
     controller.dragChanged(to: SelectionTestFixtures.pagePoint(5))
     recorder.attach(to: controller)
 
-    controller.tap() // 무시 — clear()와 달리 드래그 중에는 아무 효과가 없어야 한다.
+    // 무시 — clear()와 달리 드래그 중에는 아무 효과가 없어야 한다 (히트 판정도 생략).
+    controller.tap(at: SelectionTestFixtures.pagePoint(0))
 
     let expected = TextSelection(
       start: TextPosition(pageIndex: 0, utf16Offset: 0),
@@ -302,7 +303,7 @@ struct ReaderSelectionControllerTests {
     let recorder = SelectionCallbackRecorder()
     recorder.attach(to: controller)
 
-    controller.tap()
+    controller.tap(at: SelectionTestFixtures.pagePoint(9)) // 등록 영역 없음 — 항상 미스.
 
     #expect(controller.selection == nil)
     #expect(recorder.selectionChanges == [nil])
