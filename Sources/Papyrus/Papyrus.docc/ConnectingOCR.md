@@ -29,6 +29,9 @@ OCR 엔진은 보통 페이지를 이미지로 렌더한 뒤 그 이미지 위�
 | 표시 공간 (뷰어 화면 배치) | 아래 | 좌상단 | 포인트(pt), `displaySize` 기준 |
 | Vision 정규화 공간 (`VNRecognizedTextObservation.boundingBox`) | 위 | 좌하단 | 0...1 |
 
+표시 공간 이미지는 `PageImageRenderer`로 얻을 수 있습니다 — 자세한 내용은 아래
+"페이지 이미지 얻기"를 참고하세요.
+
 `PageTextProvider`가 반환하는 `TextRun`의 `quad`는 항상 **PDF 페이지 공간**이어야
 합니다. Vision류 엔진의 정규화 좌표는 y축 방향이 표시 공간과 반대이므로, 페이지
 공간으로 옮기기 전에 먼저 표시 공간 기준으로 뒤집어야 합니다.
@@ -66,10 +69,12 @@ let run = TextRun.uniform(range: existingLength..<(existingLength + text.utf16.c
 ```swift
 actor OCRTextProvider: PageTextProvider {
   private let document: PapyrusDocument
+  private let renderer: PageImageRenderer
   private var cache: [Int: PageTextContent] = [:]
 
   init(document: PapyrusDocument) {
     self.document = document
+    self.renderer = PageImageRenderer(document: document)
   }
 
   func textContent(forPage pageIndex: Int) async throws -> PageTextContent {
@@ -78,7 +83,7 @@ actor OCRTextProvider: PageTextProvider {
     }
     try Task.checkCancellation()
     let pageInfo = try await document.page(at: pageIndex)
-    let image = try await renderPageImage(pageInfo)   // 앱이 준비하는 페이지 래스터.
+    let image = try await renderer.image(forPage: pageIndex)
     let observations = try await recognizeText(in: image)
     let content = assemble(pageIndex: pageIndex, pageInfo: pageInfo, observations: observations)
     cache[pageIndex] = content
@@ -87,10 +92,25 @@ actor OCRTextProvider: PageTextProvider {
 }
 ```
 
-페이지 래스터 확보는 앱의 책임입니다 — Papyrus는 페이지 이미지를 얻는 공개 API를
-제공하지 않습니다. `displaySize` 비율의 이미지라면 어떤 렌더 수단을 쓰든 상관없습니다.
 OCR 엔진 호출은 시간이 걸릴 수 있으므로 `Task.checkCancellation()`으로 협조적 취소를
 지원하는 것을 권장합니다 — 검색 취소나 화면 이탈 시 불필요한 작업을 빨리 놓아줍니다.
+
+### 페이지 이미지 얻기
+
+`PageImageRenderer(document:)`로 렌더러를 만들고 `image(forPage:)`를 호출하면 그
+페이지의 표시 공간 래스터 이미지를 얻습니다. 기본 배율은 표시 크기(pt)당 3픽셀
+(≈216DPI)로, 일반 본문 OCR에 충분합니다 — 더 정밀한 인식이 필요하면 `scale`을
+높여 호출하세요. 비유한이거나 0 이하인 배율은 기본값으로 자동 교정되고, 산출 픽셀
+크기는 내부 상한에서 자동으로 줄어들므로 어떤 배율을 넘겨도 실패하거나 과도한
+메모리를 쓰지 않습니다. 이미지는 캐시되지 않고 호출마다 새로 렌더되어 즉시
+호출자 소유가 되므로, 인식이 끝나면 붙들고 있지 말고 놓아주세요.
+
+렌더러 인스턴스 하나가 문서 자원 한 벌을 소유하고 렌더를 직렬화합니다 — 위
+예제처럼 프로바이더가 인스턴스를 보유해 재사용하세요. 여러 페이지를 병렬로
+렌더하려면 인스턴스를 여러 개 만듭니다. 산출 이미지는 위 좌표 계약 표의
+"표시 공간" 행을 그대로 픽셀로 옮긴 것이라, 이 이미지 위의 정규화 좌표는
+Vision 뒤집기 공식과 `pageQuad(normalizedDisplayRect:)` 파이프라인에 무수정으로
+그대로 적용됩니다.
 
 ### 혼합 문서 레시피
 

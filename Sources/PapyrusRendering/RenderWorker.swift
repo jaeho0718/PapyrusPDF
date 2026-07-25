@@ -53,15 +53,16 @@ package struct RenderedPreview: Sendable {
   }
 }
 
-/// 렌더링 실패. 손상 문서에서도 크래시·행 없이 이 에러로 수렴한다 (패키지 불변식).
-package enum RenderError: Error, Sendable, Equatable {
-  /// CGPDFDocument 생성 실패 — CG가 문서를 해석하지 못함 (영구적, §3.1 가정 8).
+/// 렌더링 실패입니다. 손상된 문서에서도 크래시·행 없이 이 에러로 수렴합니다
+/// (패키지 불변식).
+public enum RenderError: Error, Sendable, Equatable {
+  /// CGPDFDocument 생성에 실패했습니다 — CG가 문서를 해석하지 못한 경우입니다 (영구적).
   case documentUnavailable
-  /// 해당 인덱스의 페이지가 CG 문서에 없음 (파서 페이지 수 > CG 페이지 수인 손상 파일).
+  /// 해당 인덱스의 페이지가 CG 문서에 없습니다 (파서 페이지 수 > CG 페이지 수인 손상 파일).
   case pageUnavailable(pageIndex: Int)
-  /// 비트맵 컨텍스트/이미지 생성 실패 (메모리 고갈 등).
+  /// 비트맵 컨텍스트·이미지 생성에 실패했습니다 (메모리 고갈 등).
   case imageCreationFailed
-  /// 시작 전 취소됨 (태스크 취소 또는 뷰포트 이탈 폐기).
+  /// 시작 전 취소됐습니다 (태스크 취소 또는 뷰포트 이탈 폐기).
   case cancelled
 }
 
@@ -145,24 +146,71 @@ package actor RenderWorker {
     guard !Task.isCancelled else {
       throw .cancelled
     }
-    let document = try self.resolvedDocument()
-    guard let page = document.page(at: pageIndex + 1) else {
-      throw .pageUnavailable(pageIndex: pageIndex)
+    let longestSide = max(pageSize.width, pageSize.height)
+    guard longestSide > 0 else {
+      throw .imageCreationFailed
+    }
+    let fit = CGFloat(RenderingLimits.previewMaxPixelDimension) / longestSide
+    return try self.renderFullPage(pageIndex: pageIndex, pageSize: pageSize, pixelsPerPoint: fit)
+  }
+
+  /// 페이지 전체를 OCR 등 외부 처리용 이미지로 렌더한다 (§7.2 — `PageImageRenderer`의
+  /// 유일한 소비 지점).
+  ///
+  /// `scale`이 유한한 양수가 아니면 `PageImageRenderer.defaultScale`로 교정하고, 산출
+  /// 픽셀 최장변은 `RenderingLimits.fullPageImageMaxPixelDimension`으로 자동 클램프한다 —
+  /// 어떤 배율 입력도 실패나 과도한 메모리를 만들지 않는다.
+  /// - Parameters:
+  ///   - pageIndex: 페이지 인덱스 (0 기반).
+  ///   - pageSize: 페이지 표시 크기 (파서 진실 원천 — 가정 5).
+  ///   - scale: 표시 크기(pt)당 픽셀 수 요청값 (위생 검사 전).
+  /// - Throws: ``RenderError``.
+  /// - Returns: 렌더된 페이지 전체 이미지 (`RenderedPreview`의 페이지 인덱스·이미지·비용
+  ///   형태를 그대로 재사용한다).
+  package func renderPageImage(
+    pageIndex: Int, pageSize: CGSize, scale: CGFloat
+  ) throws(RenderError) -> RenderedPreview {
+    guard !Task.isCancelled else {
+      throw .cancelled
     }
     let longestSide = max(pageSize.width, pageSize.height)
     guard longestSide > 0 else {
       throw .imageCreationFailed
     }
+    let sanitizedScale = (scale.isFinite && scale > 0) ? scale : PageImageRenderer.defaultScale
+    let clampedScale = min(
+      sanitizedScale, CGFloat(RenderingLimits.fullPageImageMaxPixelDimension) / longestSide
+    )
+    return try self.renderFullPage(
+      pageIndex: pageIndex, pageSize: pageSize, pixelsPerPoint: clampedScale
+    )
+  }
 
-    let fit = CGFloat(RenderingLimits.previewMaxPixelDimension) / longestSide
-    let pixelWidth = max(1, Int((pageSize.width * fit).rounded()))
-    let pixelHeight = max(1, Int((pageSize.height * fit).rounded()))
+  /// `renderPreview`·`renderPageImage`의 공통부 — 문서 해석→페이지 조회→컨텍스트
+  /// 생성→흰 배경 채움→배율 적용→페이지 드로잉→이미지화. 두 호출자는 배율 계산만
+  /// 달리해 이 헬퍼에 위임한다 (로직 한 벌 원칙).
+  /// - Parameters:
+  ///   - pageIndex: 페이지 인덱스 (0 기반).
+  ///   - pageSize: 페이지 표시 크기.
+  ///   - pixelsPerPoint: 호출자가 이미 결정한(위생 검사·클램프 완료) 최종 배율.
+  /// - Throws: ``RenderError``.
+  /// - Returns: 렌더된 페이지 전체 이미지.
+  private func renderFullPage(
+    pageIndex: Int, pageSize: CGSize, pixelsPerPoint: CGFloat
+  ) throws(RenderError) -> RenderedPreview {
+    let document = try self.resolvedDocument()
+    guard let page = document.page(at: pageIndex + 1) else {
+      throw .pageUnavailable(pageIndex: pageIndex)
+    }
+
+    let pixelWidth = max(1, Int((pageSize.width * pixelsPerPoint).rounded()))
+    let pixelHeight = max(1, Int((pageSize.height * pixelsPerPoint).rounded()))
     guard let context = Self.makeBitmapContext(width: pixelWidth, height: pixelHeight) else {
       throw .imageCreationFailed
     }
     Self.fillWhite(context, width: pixelWidth, height: pixelHeight)
 
-    context.scaleBy(x: fit, y: fit)
+    context.scaleBy(x: pixelsPerPoint, y: pixelsPerPoint)
     Self.drawPage(page, into: context, pageSize: pageSize)
 
     guard let image = context.makeImage() else {
