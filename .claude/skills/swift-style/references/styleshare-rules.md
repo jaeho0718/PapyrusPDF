@@ -1,7 +1,7 @@
 # StyleShare swift-style-guide 전체 규칙 정리
 
 원문: https://github.com/StyleShare/swift-style-guide
-(Papyrus 적용 기준. SwiftLint 규칙 매핑은 `.swiftlint.yml` 참조)
+(PapyrusPDF 적용 기준. SwiftLint 규칙 매핑은 `.swiftlint.yml` 참조)
 
 ## 목차
 

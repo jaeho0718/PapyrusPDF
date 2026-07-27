@@ -3,48 +3,53 @@
 import PackageDescription
 
 let package = Package(
-  name: "Papyrus",
+  name: "PapyrusPDF",
   platforms: [
     .iOS(.v18),
     .macOS(.v15)
   ],
   products: [
     // 제품은 umbrella 하나만 노출한다. (ARCHITECTURE.md 확정)
-    .library(name: "Papyrus", targets: ["Papyrus"])
+    .library(name: "PapyrusPDF", targets: ["PapyrusPDF"])
   ],
   dependencies: [
     .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.0")
   ],
   targets: [
     // ── 라이브러리 타겟 (의존 방향: UI → Rendering → Core) ──
-    .target(name: "PapyrusCore"),
-    .target(name: "PapyrusRendering", dependencies: ["PapyrusCore"]),
-    .target(name: "PapyrusUI", dependencies: ["PapyrusRendering", "PapyrusCore"]),
-    .target(name: "Papyrus", dependencies: ["PapyrusUI", "PapyrusRendering", "PapyrusCore"]),
+    .target(name: "PapyrusPDFCore"),
+    .target(name: "PapyrusPDFRendering", dependencies: ["PapyrusPDFCore"]),
+    .target(name: "PapyrusPDFUI", dependencies: ["PapyrusPDFRendering", "PapyrusPDFCore"]),
+    .target(
+      name: "PapyrusPDF",
+      dependencies: ["PapyrusPDFUI", "PapyrusPDFRendering", "PapyrusPDFCore"]
+    ),
 
     // ── 테스트 지원 (제품 비노출, 의존성 없음) ──
-    .target(name: "PapyrusTestSupport"),
+    .target(name: "PapyrusPDFTestSupport"),
 
     // ── 테스트 타겟 ──
     .testTarget(
-      name: "PapyrusTests",
-      dependencies: ["Papyrus", "PapyrusRendering", "PapyrusUI", "PapyrusTestSupport"]
+      name: "PapyrusPDFTests",
+      dependencies: ["PapyrusPDF", "PapyrusPDFRendering", "PapyrusPDFUI", "PapyrusPDFTestSupport"]
     ),
     .testTarget(
-      name: "PapyrusTestSupportTests",
-      dependencies: ["PapyrusTestSupport"]
+      name: "PapyrusPDFTestSupportTests",
+      dependencies: ["PapyrusPDFTestSupport"]
     ),
     .testTarget(
-      name: "PapyrusCoreTests",
-      dependencies: ["PapyrusCore", "PapyrusTestSupport"]
+      name: "PapyrusPDFCoreTests",
+      dependencies: ["PapyrusPDFCore", "PapyrusPDFTestSupport"]
     ),
     .testTarget(
-      name: "PapyrusRenderingTests",
-      dependencies: ["PapyrusRendering", "PapyrusCore", "PapyrusTestSupport"]
+      name: "PapyrusPDFRenderingTests",
+      dependencies: ["PapyrusPDFRendering", "PapyrusPDFCore", "PapyrusPDFTestSupport"]
     ),
     .testTarget(
-      name: "PapyrusUITests",
-      dependencies: ["PapyrusUI", "PapyrusRendering", "PapyrusCore", "PapyrusTestSupport"]
+      name: "PapyrusPDFUITests",
+      dependencies: [
+        "PapyrusPDFUI", "PapyrusPDFRendering", "PapyrusPDFCore", "PapyrusPDFTestSupport"
+      ]
     )
   ],
   swiftLanguageModes: [.v6]

@@ -2,10 +2,10 @@
 # pre-push — main/develop 브랜치로의 직접 push를 차단한다.
 # develop/main 병합은 반드시 Pull Request를 경유해야 한다 (gitflow 규칙).
 # 원격 브랜치 보호의 로컬 보완 장치이며, 불가피한 경우에만
-# PAPYRUS_ALLOW_PROTECTED_PUSH=1 로 우회할 수 있다.
+# PAPYRUSPDF_ALLOW_PROTECTED_PUSH=1 로 우회할 수 있다.
 set -u
 
-if [ "${PAPYRUS_ALLOW_PROTECTED_PUSH:-0}" = "1" ]; then
+if [ "${PAPYRUSPDF_ALLOW_PROTECTED_PUSH:-0}" = "1" ]; then
   exit 0
 fi
 

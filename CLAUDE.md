@@ -1,10 +1,10 @@
-# Papyrus
+# PapyrusPDF
 
-## 하네스: Papyrus 개발
+## 하네스: PapyrusPDF 개발
 
 **목표:** gitflow + 설계(fable)/구현(sonnet) 분리 + SwiftLint/DocC 강제 파이프라인으로 대용량 PDF 패키지를 개발한다.
 
-**트리거:** Papyrus의 기능 구현·로직 개선·버그 수정·테스트 추가 등 개발 작업 요청 시 `papyrus-dev` 스킬을 사용하라. 단순 질문이나 코드 읽기는 직접 응답 가능.
+**트리거:** PapyrusPDF의 기능 구현·로직 개선·버그 수정·테스트 추가 등 개발 작업 요청 시 `papyrus-dev` 스킬을 사용하라. 단순 질문이나 코드 읽기는 직접 응답 가능.
 
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |

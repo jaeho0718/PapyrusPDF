@@ -1,14 +1,14 @@
 ---
 name: swift-style
 description: >
-  Papyrus의 Swift 코드 스타일 규칙(StyleShare swift-style-guide 기반)과 SwiftLint 운용법.
+  PapyrusPDF의 Swift 코드 스타일 규칙(StyleShare swift-style-guide 기반)과 SwiftLint 운용법.
   Swift 코드를 작성·수정하기 전, SwiftLint 위반을 해결할 때, "스타일 맞춰줘"/"린트 에러
   고쳐줘" 요청 시 반드시 사용할 것.
 ---
 
 # swift-style — StyleShare 스타일 + SwiftLint 운용
 
-Papyrus의 모든 Swift 코드는 [StyleShare swift-style-guide]
+PapyrusPDF의 모든 Swift 코드는 [StyleShare swift-style-guide]
 (https://github.com/StyleShare/swift-style-guide)를 따르며, `.swiftlint.yml`이 이를
 매 커밋 시 강제한다 (pre-commit 훅, `--strict`).
 

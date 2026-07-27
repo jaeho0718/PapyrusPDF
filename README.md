@@ -1,10 +1,10 @@
-# Papyrus
+# PapyrusPDF
 
-[![CI](https://github.com/jaeho0718/Papyrus/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/jaeho0718/Papyrus/actions/workflows/ci.yml)
+[![CI](https://github.com/jaeho0718/PapyrusPDF/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/jaeho0718/PapyrusPDF/actions/workflows/ci.yml)
 
 ----
 
-Papyrus는 수천 페이지급 대용량 PDF를 macOS·iPadOS·iOS에서 다루기 위한 순수 Swift
+PapyrusPDF는 수천 페이지급 대용량 PDF를 macOS·iPadOS·iOS에서 다루기 위한 순수 Swift
 패키지입니다. PDFKit에 의존하지 않고, PDF 파일 구조(xref, 객체, 페이지 트리,
 메타데이터, 목차, 페이지별 텍스트)는 직접 파싱하고 픽셀 래스터화만 Core Graphics에
 위임하는 하이브리드 구조를 취합니다 — 이 분리 덕분에 대용량 파일을 여는 방식과
@@ -24,21 +24,23 @@ Papyrus는 수천 페이지급 대용량 PDF를 macOS·iPadOS·iOS에서 다루�
 
 0.2.0 표면은 안정 상태입니다. 릴리스 이력은 GitHub Releases를 참고하세요.
 
-## Papyrus 사용 시작하기
+> 이 패키지는 0.1.0까지 Papyrus라는 이름으로 배포되었습니다. 0.2.0부터 저장소·패키지·모듈·공개 타입 접두사가 PapyrusPDF로 바뀌었습니다.
+
+## PapyrusPDF 사용 시작하기
 
 Swift Package Manager로 설치합니다.
 
 ```swift
 dependencies: [
-  .package(url: "https://github.com/jaeho0718/Papyrus.git", branch: "main")
+  .package(url: "https://github.com/jaeho0718/PapyrusPDF.git", branch: "main")
 ]
 ```
 
-타겟 의존성에는 `Papyrus`(엄브렐러) 하나만 추가하면 파싱 코어와 뷰어 API가 모두
+타겟 의존성에는 `PapyrusPDF`(엄브렐러) 하나만 추가하면 파싱 코어와 뷰어 API가 모두
 노출됩니다.
 
 ```swift
-.target(name: "YourTarget", dependencies: ["Papyrus"])
+.target(name: "YourTarget", dependencies: ["PapyrusPDF"])
 ```
 
 iOS 18+ / iPadOS 18+ / macOS 15+, Swift 6(strict concurrency)을 요구합니다.
@@ -54,10 +56,10 @@ PDF의 OCR 연결은 [ConnectingOCR]를 참고하세요. 현재 지원 범위와
 있습니다.
 
 ```bash
-swift package generate-documentation --target Papyrus
+swift package generate-documentation --target PapyrusPDF
 ```
 
-## Papyrus 개발 참여하기
+## PapyrusPDF 개발 참여하기
 
 저장소를 클론한 뒤 빌드와 테스트, 린트를 실행합니다.
 
@@ -67,9 +69,9 @@ swift test
 swiftlint lint --strict
 ```
 
-손상 문서에 대한 심층 퍼즈 실행은 별도 커맨드로 수행합니다: `PAPYRUS_FUZZ=1 swift
+손상 문서에 대한 심층 퍼즈 실행은 별도 커맨드로 수행합니다: `PAPYRUSPDF_FUZZ=1 swift
 test -c release --filter DeepFuzzTests`. 실제 뷰어 동작과 Instruments
-프로파일링(스크롤·메모리)을 눈으로 확인하려면 `Examples/PapyrusDemo` 데모 앱을
+프로파일링(스크롤·메모리)을 눈으로 확인하려면 `Examples/PapyrusPDFDemo` 데모 앱을
 여세요.
 
 gitflow 브랜치 전략, 코드 스타일, 문서화·테스트 규칙, PR 절차를 포함한 개발 설계
@@ -85,15 +87,15 @@ gitflow 브랜치 전략, 코드 스타일, 문서화·테스트 규칙, PR 절�
 
 ## 라이선스
 
-Papyrus는 [MIT 라이선스][LICENSE]를 따릅니다.
+PapyrusPDF는 [MIT 라이선스][LICENSE]를 따릅니다.
 
-[GettingStarted]: Sources/Papyrus/Papyrus.docc/GettingStarted.md
-[ViewerGuide]: Sources/Papyrus/Papyrus.docc/ViewerGuide.md
-[SelectingText]: Sources/Papyrus/Papyrus.docc/SelectingText.md
-[PersistentHighlights]: Sources/Papyrus/Papyrus.docc/PersistentHighlights.md
-[ConnectingOCR]: Sources/Papyrus/Papyrus.docc/ConnectingOCR.md
-[Architecture]: Sources/Papyrus/Papyrus.docc/Architecture.md
-[SupportedFeatures]: Sources/Papyrus/Papyrus.docc/SupportedFeatures.md
+[GettingStarted]: Sources/PapyrusPDF/PapyrusPDF.docc/GettingStarted.md
+[ViewerGuide]: Sources/PapyrusPDF/PapyrusPDF.docc/ViewerGuide.md
+[SelectingText]: Sources/PapyrusPDF/PapyrusPDF.docc/SelectingText.md
+[PersistentHighlights]: Sources/PapyrusPDF/PapyrusPDF.docc/PersistentHighlights.md
+[ConnectingOCR]: Sources/PapyrusPDF/PapyrusPDF.docc/ConnectingOCR.md
+[Architecture]: Sources/PapyrusPDF/PapyrusPDF.docc/Architecture.md
+[SupportedFeatures]: Sources/PapyrusPDF/PapyrusPDF.docc/SupportedFeatures.md
 [Docs/ARCHITECTURE.md]: Docs/ARCHITECTURE.md
-[Issues]: https://github.com/jaeho0718/Papyrus/issues
+[Issues]: https://github.com/jaeho0718/PapyrusPDF/issues
 [LICENSE]: LICENSE
