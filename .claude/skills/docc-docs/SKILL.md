@@ -1,7 +1,7 @@
 ---
 name: docc-docs
 description: >
-  Papyrus의 DocC 문서화 규칙. Swift 코드 작성·수정 시 문서 주석(///) 작성법, DocC 카탈로그
+  PapyrusPDF의 DocC 문서화 규칙. Swift 코드 작성·수정 시 문서 주석(///) 작성법, DocC 카탈로그
   구성, 문서 생성 절차에 사용한다. "문서화해줘", "DocC 만들어줘", 공개 API 추가/변경 작업
   시 반드시 참조할 것. 매 작업마다 문서화는 필수 규칙이다.
 ---
@@ -24,9 +24,9 @@ description: >
 /// - Parameters:
 ///   - url: 열려는 PDF 파일의 위치입니다.
 /// - Returns: 열린 문서 인스턴스입니다.
-/// - Throws: 파일이 PDF가 아니면 ``PapyrusError/notAPDF``,
-///   복구 불가 손상이면 ``PapyrusError/damagedDocument(underlying:)``.
-public static func open(url: URL) async throws -> PapyrusDocument
+/// - Throws: 파일이 PDF가 아니면 ``PapyrusPDFError/notAPDF``,
+///   복구 불가 손상이면 ``PapyrusPDFError/damagedDocument(underlying:)``.
+public static func open(url: URL) async throws -> PapyrusPDFDocument
 ```
 
 - 첫 줄: 한 문장 요약 (마침표로 끝냄). 빈 줄 후 상세 설명. public 주석은 합니다체(위 규칙).
@@ -41,11 +41,11 @@ public static func open(url: URL) async throws -> PapyrusDocument
 타겟별 카탈로그는 공개 API가 생기는 시점(마일스톤 M3)부터 유지한다:
 
 ```
-Sources/PapyrusCore/PapyrusCore.docc/
-  PapyrusCore.md        ← 랜딩 페이지: 개요 + 주요 심벌 Topics 그룹핑
+Sources/PapyrusPDFCore/PapyrusPDFCore.docc/
+  PapyrusPDFCore.md        ← 랜딩 페이지: 개요 + 주요 심벌 Topics 그룹핑
 ```
 
-- 랜딩 페이지 첫 줄은 `# ``PapyrusCore`` ` 형식.
+- 랜딩 페이지 첫 줄은 `# ``PapyrusPDFCore`` ` 형식.
 - 새 공개 타입 추가 시 랜딩 페이지의 Topics에 등록한다.
 - **DocC는 사람이 읽는 독립 기술 문서다.** 저장소 내부 산출물 참조(`Docs/ARCHITECTURE.md`
   경로, `_workspace/` 문서, "N행" 같은 위치 지시, 마일스톤 번호 M1~M8, 스킬 이름)를 본문에
@@ -57,17 +57,17 @@ Sources/PapyrusCore/PapyrusCore.docc/
   현재 시제 시스템 설명으로 쓴다("Mn에서 구현" 같은 개발 이력 서술 금지). 아키텍처가
   실질적으로 바뀌는 변경 시 이 아티클도 갱신한다. `Docs/ARCHITECTURE.md`는 개발 계획서
   (마일스톤·리스크·검증 계획)로서 별도 유지하며, 서로 역할이 다르므로 그대로 복사하지 않는다.
-- 엄브렐러 카탈로그(`Papyrus.docc`)에서는 다른 타겟의 심벌 링크(` ``...`` `)가 해소되지
+- 엄브렐러 카탈로그(`PapyrusPDF.docc`)에서는 다른 타겟의 심벌 링크(` ``...`` `)가 해소되지
   않으므로 코드 폰트(백틱 1개)로 표기한다.
 
 ## 생성·검증 절차
 
 ```bash
 # 문서 빌드 (경고 = 심벌 링크 오타 등 확인)
-swift package generate-documentation --target PapyrusCore
+swift package generate-documentation --target PapyrusPDFCore
 
 # 로컬 미리보기
-swift package --disable-sandbox preview-documentation --target PapyrusCore
+swift package --disable-sandbox preview-documentation --target PapyrusPDFCore
 ```
 
 `swift-docc-plugin` 의존성이 Package.swift에 필요하다 — 카탈로그 도입 시점에 추가한다.

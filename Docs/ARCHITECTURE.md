@@ -1,6 +1,6 @@
-# Papyrus 아키텍처 설계
+# PapyrusPDF 아키텍처 설계
 
-Papyrus는 macOS 15+ / iPadOS 18+ / iOS 18+ 용 Swift 패키지로, 수천 페이지급 대용량 PDF를 효율적으로 다루는 것이 목표다. PDFKit에 의존하지 않고:
+PapyrusPDF는 macOS 15+ / iPadOS 18+ / iOS 18+ 용 Swift 패키지로, 수천 페이지급 대용량 PDF를 효율적으로 다루는 것이 목표다. PDFKit에 의존하지 않고:
 
 1. **파싱 코어** — PDF 파일 구조(xref, 객체, 페이지 트리, 메타데이터, 목차, 페이지별 텍스트)를 순수 Swift로 직접 파싱. 지연 로딩·메모리 맵 기반으로 대용량 최적화의 제어권 확보.
 2. **렌더링** — 픽셀 래스터화만 Core Graphics(`CGPDFPage` → `CGContext`)에 위임 (하이브리드 방식).
@@ -16,28 +16,30 @@ Papyrus는 macOS 15+ / iPadOS 18+ / iOS 18+ 용 Swift 패키지로, 수천 페�
   수 없으므로), 개발자 정의 선택 가능 영역, `PageTextProvider` 주입(OCR)과
   `PageImageRenderer`, 지속 하이라이트(Codable, 영속화는 앱 책임). 주석·썸네일·
   접근성·문서 전체 선택은 계속 제외.
+- 0.2.0 개칭: 패키지·저장소·모듈·공개 심볼 접두사를 Papyrus → PapyrusPDF로 전면 변경
+  (하위 호환 typealias 없음, 무접두사 공개 타입은 유지).
 
 ## 타겟 구조
 
 ```
-Papyrus (umbrella, @_exported)
- ├── PapyrusUI          ← SwiftUI + UIKit/AppKit 뷰어
- │     ├── PapyrusRendering
- │     └── PapyrusCore
- ├── PapyrusRendering   ← CGPDFDocument 풀, 타일, 캐시
- │     └── PapyrusCore
- └── PapyrusCore        ← COS 파서, xref, 페이지 트리, 메타데이터, 목차, 텍스트
+PapyrusPDF (umbrella, @_exported)
+ ├── PapyrusPDFUI          ← SwiftUI + UIKit/AppKit 뷰어
+ │     ├── PapyrusPDFRendering
+ │     └── PapyrusPDFCore
+ ├── PapyrusPDFRendering   ← CGPDFDocument 풀, 타일, 캐시
+ │     └── PapyrusPDFCore
+ └── PapyrusPDFCore        ← COS 파서, xref, 페이지 트리, 메타데이터, 목차, 텍스트
 ```
 
-- `Package.swift`: `platforms: [.iOS(.v18), .macOS(.v15)]` 추가, 4개 타겟 + 테스트 타겟들 + `PapyrusTestSupport`(픽스처 빌더).
-- 접근 수준: COS 계층은 `package` 접근 수준으로 타겟 간 공유, 외부 공개는 `PapyrusDocument`와 값 타입들 + `PapyrusReader`/`PapyrusReaderModel`만.
-- 제품(product)은 `Papyrus` 하나만 노출.
+- `Package.swift`: `platforms: [.iOS(.v18), .macOS(.v15)]` 추가, 4개 타겟 + 테스트 타겟들 + `PapyrusPDFTestSupport`(픽스처 빌더).
+- 접근 수준: COS 계층은 `package` 접근 수준으로 타겟 간 공유, 외부 공개는 `PapyrusPDFDocument`와 값 타입들 + `PapyrusPDFReader`/`PapyrusPDFReaderModel`만.
+- 제품(product)은 `PapyrusPDF` 하나만 노출.
 
 ## 디렉터리 구성
 
 ```
 Sources/
-  PapyrusCore/
+  PapyrusPDFCore/
     IO/         MappedFile.swift (메모리맵 파일, Sendable)
     COS/        COSObject.swift, COSLexer.swift, COSParser.swift, ObjectID.swift
     XRef/       XRefTable.swift, XRefTableParser.swift, XRefStreamParser.swift,
@@ -52,15 +54,15 @@ Sources/
                 Encodings.swift, GlyphList.swift(AGL 서브셋), TextAssembler.swift,
                 PageContentSanitizer.swift, SelectionGeometry.swift(+HitTest),
                 TextBoundary.swift, TextRunGeometry.swift, SearchMatcher.swift
-    Public/     PapyrusDocument.swift, Models.swift, PapyrusError.swift, TextSearch.swift,
+    Public/     PapyrusPDFDocument.swift, Models.swift, PapyrusPDFError.swift, TextSearch.swift,
                 PageTextProvider.swift, TextSelectionModel.swift,
                 PageInfo+DisplayGeometry.swift
-  PapyrusRendering/
+  PapyrusPDFRendering/
     CGDocumentPool.swift, RenderWorker.swift, TileKey.swift, TileCache.swift,
     PagePreviewCache.swift, TileRenderQueue.swift, MemoryPressure.swift,
     RenderingLimits.swift(한도 상수), RenderRequest.swift(우선순위 버퍼),
     PageImageRenderer.swift
-  PapyrusUI/
+  PapyrusPDFUI/
     Shared/     ReaderCore.swift(+Selection/+Highlights/+Search/+Fetching),
                 ReaderLayoutEngine.swift, PageLayerController.swift(PageLayerPool 동거),
                 VisibleRangeCalculator.swift, ReaderScrollHost.swift,
@@ -75,12 +77,12 @@ Sources/
                 EditMenuPresenter_iOS.swift + UIViewRepresentable
     macOS/      ReaderScrollView_macOS.swift, SelectionInput_macOS.swift,
                 MenuPresenter_macOS.swift + NSViewRepresentable
-    SelectionMenu.swift, SelectableRegion.swift, PapyrusHighlight.swift,
-    PapyrusReader.swift, PapyrusReaderModel.swift(+Highlights)
-  Papyrus/      Papyrus.swift (@_exported)
+    SelectionMenu.swift, SelectableRegion.swift, Highlight.swift,
+    PapyrusPDFReader.swift, PapyrusPDFReaderModel.swift(+Highlights)
+  PapyrusPDF/      PapyrusPDF.swift (@_exported)
 ```
 
-## 파싱 코어 설계 (PapyrusCore)
+## 파싱 코어 설계 (PapyrusPDFCore)
 
 ### 파일 접근
 - `MappedFile`: `Data(contentsOf:options:[.alwaysMapped])` 래핑, 오프셋 기반 랜덤 액세스. 전체 파일을 절대 메모리에 올리지 않음. `Data` 직접 입력도 지원(테스트용).
@@ -104,7 +106,7 @@ Sources/
 - 이미지 필터(DCT/JPX/JBIG2/CCITT)는 디코딩 안 함 — 이미지는 렌더링 시 CG가 처리.
 
 ### 암호화
-- **v1: 감지 후 `PapyrusError.encryptedDocument`로 명확히 실패.** 단 `SecurityHandler` 프로토콜 심을 지금 만들어 모든 문자열/스트림이 핸들러를 경유하게 함 → 이후 표준 핸들러(RC4/AES) 추가 시 다른 계층 무수정.
+- **v1: 감지 후 `PapyrusPDFError.encryptedDocument`로 명확히 실패.** 단 `SecurityHandler` 프로토콜 심을 지금 만들어 모든 문자열/스트림이 핸들러를 경유하게 함 → 이후 표준 핸들러(RC4/AES) 추가 시 다른 계층 무수정.
 
 ### 페이지 트리
 - **한 번에 평탄화** (첫 접근 시): 반복 순회 + 순환 가드, 상속 속성(/MediaBox, /Rotate, /Resources) 해소하여 `[PageRecord]` 구축. 5,000페이지 ≈ 수십 ms, ~500KB. O(1) 페이지 접근 + `ObjectID → pageIndex` 역맵(목차 해소에 필요) + 뷰어 레이아웃 즉시 계산 가능.
@@ -133,7 +135,7 @@ Sources/
 
 ### 동시성 모델
 - `actor PDFDocumentCore`: 맵 파일, xref, 객체 LRU, ObjStm 캐시, 폰트 캐시, 페이지 인덱스, 텍스트 캐시 소유. 모든 객체 해소가 여기로 수렴.
-- 공개 `PapyrusDocument`는 Sendable 클래스로 액터 래핑, getter는 async, 반환값은 전부 Sendable 스냅샷 값 타입.
+- 공개 `PapyrusPDFDocument`는 Sendable 클래스로 액터 래핑, getter는 async, 반환값은 전부 Sendable 스냅샷 값 타입.
 - CPU 무거운 작업(inflate, 콘텐츠 해석, 복구 스캔)은 액터가 넘겨준 데이터로 nonisolated 실행 — 액터 비블로킹. 페이지별 in-flight `Task` 딕셔너리로 중복 요청 dedupe.
 - **CGPDFDocument는 Sendable 아님** → `RenderWorker` 액터 N개(각자 독립 CGPDFDocument 소유, N = min(4, 코어 수)) 풀로 병렬 타일 렌더링. CG 객체는 액터 밖으로 절대 안 나가고 `CGImage`(불변, 스레드 안전)만 반환.
 - 뷰어 선택 계층: `ReaderSelectionController`·`SelectablePageStore`(@MainActor,
@@ -145,7 +147,7 @@ Sources/
   전부 메인 액터. iOS는 선택 확정 시 push 표시, macOS는 우클릭 pull(확정 시점 프리페치
   캐시), 단 영역 선택은 양 플랫폼 push(macOS는 NSMenu.popUp).
 
-## 렌더링 파이프라인 (PapyrusRendering)
+## 렌더링 파이프라인 (PapyrusPDFRendering)
 
 - **CATiledLayer 대신 커스텀 타일링** — CATiledLayer는 동기 draw 콜백이라 액터 기반 비동기 렌더링과 충돌하고, 줌 페이드 아티팩트 + 캐시 제어 불가. 커스텀: 페이지당 프리뷰 레이어(전체 페이지 저해상도) 아래 + 512pt 타일 레이어들 위.
 - `TileKey`(pageIndex, scaleBucket, col, row). 줌 스케일은 √2 버킷으로 스냅 — 핀치 중엔 레이어 transform 확대(즉시·흐릿), 제스처 종료 시 재타일링.
@@ -154,7 +156,7 @@ Sources/
 - 프리페치: 프리뷰는 visible ±3페이지, 타일은 visible ±0.5 뷰포트.
 - 메모리 압박: `DispatchSource.makeMemoryPressureSource` — warning 시 예산 반감, critical 시 타일 전량 퍼지.
 
-## 뷰어 (PapyrusUI)
+## 뷰어 (PapyrusPDFUI)
 
 - **플랫폼 공유 전략**: CALayer 수준까지 공유(~85%) — `ReaderCore`(@MainActor, 레이아웃·재활용·타일 요청·하이라이트), `ReaderLayoutEngine`, `PageLayerController`. 플랫폼별은 스크롤 호스트만 (`ReaderScrollHost` 프로토콜: viewportBounds, zoomScale, contentLayer, setContentSize, scrollTo).
 - macOS는 `isFlipped = true` NSView로 좌표계를 iOS와 통일 — 플랫폼 분기 대부분 제거.
@@ -162,7 +164,7 @@ Sources/
 - **가상화**: visibleRange ±2페이지만 `PageLayerController` 실체화, 재활용 풀(캡 ~8). 이탈 시 풀 반환 + 타일 요청 취소.
 - 탐색: goToPage / 목차 목적지 이동 / `ReaderPosition`(pageIndex + 페이지 내 정규화 오프셋 + zoom, Codable) 저장·복원.
 - M5/M6 경계 계약: 가시 캐시 조회는 동기(nonisolated Mutex 캐시), 미스는 visible 등급 async 페치, 프리페치·폐기는 `updateViewport` 위임.
-- **검색**: `PapyrusDocument.search()` → `AsyncThrowingStream<SearchResult>` (병렬 텍스트 워밍업, 페이지 순서대로 방출). 매칭은 Foundation `range(of:options:[.caseInsensitive,.diacriticInsensitive])` 반복 — 폴딩 길이 변화로 인한 오프셋 매핑 버그 회피. 결과 quad는 run + advances에서 보간. 뷰어는 페이지당 `CAShapeLayer` 하나로 전체 quad 패스 오버레이, 현재 매치는 강조 레이어, next/prev 시 스크롤 이동. 매치 캡: 페이지당 1,000 / 문서당 10,000 — 초과 시 정상 종료 (스트림 무한 버퍼 정책의 안전 근거).
+- **검색**: `PapyrusPDFDocument.search()` → `AsyncThrowingStream<SearchResult>` (병렬 텍스트 워밍업, 페이지 순서대로 방출). 매칭은 Foundation `range(of:options:[.caseInsensitive,.diacriticInsensitive])` 반복 — 폴딩 길이 변화로 인한 오프셋 매핑 버그 회피. 결과 quad는 run + advances에서 보간. 뷰어는 페이지당 `CAShapeLayer` 하나로 전체 quad 패스 오버레이, 현재 매치는 강조 레이어, next/prev 시 스크롤 이동. 매치 캡: 페이지당 1,000 / 문서당 10,000 — 초과 시 정상 종료 (스트림 무한 버퍼 정책의 안전 근거).
 - **선택**: 제스처(플랫폼 입력) → 콘텐츠 공간 점 → 페이지 표시 공간 분해 →
   `ReaderSelectionController`(단일 활성 선택 상태 기계 — 텍스트/영역 상호 배타) →
   `SelectionGeometry` 히트테스트(라인 밴드 이진 탐색 + 베이스라인 투영) → 라인 병합
@@ -173,7 +175,7 @@ Sources/
   → 검색 하이라이트(전체 quad + 현재 매치 강조) → 선택 채움(텍스트/영역 공용) →
   선택 핸들(iOS). 근거: 검색은 과업 지향이라 항상 보이고, 선택은 직접 조작 피드백이라
   최상위. `prepareForReuse`는 네 종을 전부 클리어한다.
-- SwiftUI 퍼사드: `PapyrusReader(document:model:)` + `@Observable PapyrusReaderModel`(currentPageIndex, visiblePageRange, zoomScale, searchState, goToPage, search, next/previousMatch, position 저장·복원).
+- SwiftUI 퍼사드: `PapyrusPDFReader(document:model:)` + `@Observable PapyrusPDFReaderModel`(currentPageIndex, visiblePageRange, zoomScale, searchState, goToPage, search, next/previousMatch, position 저장·복원).
 - 확장 대비: 텍스트 선택·오버레이 종 추가는 0.2.0에서 예고대로 구조 변경 없이
   구현됨. 남은 심 — 썸네일 = RenderWorker 프리뷰 재사용(`PageImageRenderer`가 그
   첫 소비자), 접근성 = 페이지 텍스트+quad 노출, 주석 = 오버레이 종 추가.
@@ -181,15 +183,15 @@ Sources/
 ## 공개 API 요약
 
 ```swift
-public final class PapyrusDocument: Sendable {
-    static func open(url: URL) async throws(PapyrusError) -> PapyrusDocument
-    static func open(data: Data) async throws(PapyrusError) -> PapyrusDocument
+public final class PapyrusPDFDocument: Sendable {
+    static func open(url: URL) async throws(PapyrusPDFError) -> PapyrusPDFDocument
+    static func open(data: Data) async throws(PapyrusPDFError) -> PapyrusPDFDocument
     var openWarnings: [OpenWarning] { get }
-    var pageCount: Int { get async throws(PapyrusError) }
-    var metadata: DocumentMetadata { get async throws(PapyrusError) }
-    var outline: [OutlineItem] { get async throws(PapyrusError) }
-    func page(at index: Int) async throws(PapyrusError) -> PageInfo
-    func text(forPage index: Int) async throws(PapyrusError) -> PageTextContent
+    var pageCount: Int { get async throws(PapyrusPDFError) }
+    var metadata: DocumentMetadata { get async throws(PapyrusPDFError) }
+    var outline: [OutlineItem] { get async throws(PapyrusPDFError) }
+    func page(at index: Int) async throws(PapyrusPDFError) -> PageInfo
+    func text(forPage index: Int) async throws(PapyrusPDFError) -> PageTextContent
     func search(_ query: String, options: SearchOptions) -> AsyncThrowingStream<SearchResult, Error>
     func search(_ query: String, options: SearchOptions = .init(),
                 provider: any PageTextProvider) -> AsyncThrowingStream<SearchResult, Error>
@@ -197,25 +199,25 @@ public final class PapyrusDocument: Sendable {
 // 값 타입: DocumentMetadata, PageInfo(mediaBox/cropBox/rotation/displaySize),
 //         OutlineItem(title/destination/children), PageTextContent(string/runs),
 //         TextRun(range/quad/advances/isInvisible), Quad, SearchResult(pageIndex/range/quads/snippet/snippetMatchRange)
-// enum PapyrusError: notAPDF, damagedDocument, encryptedDocument, pageOutOfRange,
+// enum PapyrusPDFError: notAPDF, damagedDocument, encryptedDocument, pageOutOfRange,
 //                    unsupportedFilter, cancelled ...
 // 추가 값 타입/프로토콜: TextPosition, TextSelection(start/end/pageRange/isEmpty,
 //   Codable), PageTextProvider(textContent(forPage:)), DocumentTextProvider,
 //   PageInfo.displayTransform/pageQuad(normalizedDisplayRect:), Quad(Codable,
 //   init(rect:)), TextRun.uniform(range:quad:isInvisible:)
-// PapyrusRendering: PageImageRenderer(init(document:)/image(forPage:scale:)), RenderError
+// PapyrusPDFRendering: PageImageRenderer(init(document:)/image(forPage:scale:)), RenderError
 
-// M6 공개 표면 (PapyrusUI):
-public struct PapyrusReader: View {
-    init(document: PapyrusDocument, model: PapyrusReaderModel,
+// M6 공개 표면 (PapyrusPDFUI):
+public struct PapyrusPDFReader: View {
+    init(document: PapyrusPDFDocument, model: PapyrusPDFReaderModel,
          textProvider: (any PageTextProvider)? = nil)
 }
 extension View {
-    func papyrusSelectionMenu(_ items: SelectionMenuItemsBuilder) -> some View
+    func papyrusPDFSelectionMenu(_ items: SelectionMenuItemsBuilder) -> some View
 }
 @MainActor @Observable
-public final class PapyrusReaderModel {
-    var loadState: ReaderLoadState { get }   // loading / ready / failed(PapyrusError)
+public final class PapyrusPDFReaderModel {
+    var loadState: ReaderLoadState { get }   // loading / ready / failed(PapyrusPDFError)
     var pageCount: Int { get }
     var currentPageIndex: Int { get }
     var visiblePageRange: Range<Int> { get }
@@ -227,7 +229,7 @@ public final class PapyrusReaderModel {
 }
 // 값 타입: ReaderPosition(pageIndex/normalizedOffset/zoomScale, Codable),
 //         ReaderLoadState(loading/ready/failed)
-// PapyrusReaderModel 추가 멤버:
+// PapyrusPDFReaderModel 추가 멤버:
 //   selection: TextSelection? / selectedRegion: SelectableRegion?
 //   select(_:), clearSelection(), selectedString() async
 //   setSelectableRegions(_:forPage:), selectableRegions(forPage:),
@@ -243,13 +245,13 @@ public final class PapyrusReaderModel {
 
 ## 테스트 전략 (Swift Testing)
 
-- **`PapyrusTestSupport`의 `PDFFixtureBuilder`가 핵심**: 코드로 최소 PDF를 생성하는 소형 PDF 라이터. 모든 xref 변형(.classicTable/.xrefStream/.objectStreams/.hybrid), 증분 업데이트, 의도적 손상 모드를 재현 가능 — 바이너리 블롭 관리 불필요. 실제 소형 PDF 5~10개를 리소스로 보충.
+- **`PapyrusPDFTestSupport`의 `PDFFixtureBuilder`가 핵심**: 코드로 최소 PDF를 생성하는 소형 PDF 라이터. 모든 xref 변형(.classicTable/.xrefStream/.objectStreams/.hybrid), 증분 업데이트, 의도적 손상 모드를 재현 가능 — 바이너리 블롭 관리 불필요. 실제 소형 PDF 5~10개를 리소스로 보충.
 - 유닛: 렉서 골든 테스트(`@Test(arguments:)` 파라미터화), 필터 라운드트립, xref 매트릭스, 날짜 파서, ToUnicode/커닝 공백 삽입 등 텍스트 추출 검증, 네임 트리 조회.
 - 렌더링: 스모크 수준(타일 CGImage 비-nil + 크기 + 픽셀 프로브). 픽셀 퍼펙트 스냅샷은 v1 보류(OS 버전별 CG 출력 편차).
-- 뷰어: `ReaderLayoutEngine`은 순수 수학이라 집중 테스트(`Tests/PapyrusUITests` — PapyrusRenderingTests 전례를 따르는 별도 타겟). 스크롤 동작은 데모 앱에서 수동 검증.
+- 뷰어: `ReaderLayoutEngine`은 순수 수학이라 집중 테스트(`Tests/PapyrusPDFUITests` — PapyrusPDFRenderingTests 전례를 따르는 별도 타겟). 스크롤 동작은 데모 앱에서 수동 검증.
 - 성능: 픽스처 빌더로 5,000페이지 합성 PDF 생성 → 열기+pageCount < 250ms, warm `page(at:)` < 1ms 등을 `ContinuousClock` 수동 측정 + `#expect` 판정으로 게이트 (env 플래그 뒤에). `.timeLimit` trait은 최소 단위가 분이라 ms 게이트에 쓸 수 없고, 행(hang) 가드로만 사용.
-- `Examples/PapyrusDemo` 앱 (별도 Xcode 프로젝트) — Instruments로 스크롤/메모리 프로파일링.
-- 퍼징(M8): 시드 픽스처 + 결정론적 뮤테이터(`FuzzCaseID` 트리플로 완전 재현) + 케이스별 벽시계 가드. CI 상시 스모크(고정 시드) / 로컬 심층(`PAPYRUS_FUZZ=1`) 이원화. 발견 결함은 트리플 회귀 코퍼스로 영구 고정.
+- `Examples/PapyrusPDFDemo` 앱 (별도 Xcode 프로젝트) — Instruments로 스크롤/메모리 프로파일링.
+- 퍼징(M8): 시드 픽스처 + 결정론적 뮤테이터(`FuzzCaseID` 트리플로 완전 재현) + 케이스별 벽시계 가드. CI 상시 스모크(고정 시드) / 로컬 심층(`PAPYRUSPDF_FUZZ=1`) 이원화. 발견 결함은 트리플 회귀 코퍼스로 영구 고정.
 
 ## 구현 마일스톤
 
@@ -266,7 +268,7 @@ public final class PapyrusReaderModel {
 | M8 | 하드닝 (손상 파일 퍼징 — 크래시/행 금지), DocC, README | 코퍼스 통과 |
 | M9 | 선택 코어 (선택 모델·프로바이더·히트테스트 + 검색 일반화) | 선택 코어 테스트 통과 |
 | M10 | 드래그 선택 + 복사 (선택 컨트롤러·오버레이·플랫폼 입력·기본 복사 메뉴) | 양 플랫폼 드래그 선택·복사 동작 |
-| M11 | 선택 메뉴 공개화 (`SelectionContext`·`MenuItem`·`papyrusSelectionMenu`) | 커스텀 메뉴 항목 시연 |
+| M11 | 선택 메뉴 공개화 (`SelectionContext`·`MenuItem`·`papyrusPDFSelectionMenu`) | 커스텀 메뉴 항목 시연 |
 | M12 | 선택 가능 영역 (`SelectableRegion`·`RegionHitTester`·탭 선택·메뉴 연동) | 영역 탭 → 메뉴 표시 |
 | M13 | OCR 주입 배선(+`PageImageRenderer`) | OCR 프로바이더로 선택·검색 동작 |
 | M14 | 지속 하이라이트 | 하이라이트 생성·저장·복원 시연 |
@@ -292,7 +294,7 @@ public final class PapyrusReaderModel {
 
 1. 각 마일스톤마다 `swift test` (macOS + iOS 시뮬레이터 목적지).
 2. M3 이후: 실제 대용량 PDF(논문·기술서적 등)로 메타데이터/목차/페이지 수 수동 대조.
-3. M6 이후: `Examples/PapyrusDemo`에서 5,000페이지 문서 스크롤 — Instruments(Time Profiler, Allocations)로 60fps + 메모리 상한 확인.
+3. M6 이후: `Examples/PapyrusPDFDemo`에서 5,000페이지 문서 스크롤 — Instruments(Time Profiler, Allocations)로 60fps + 메모리 상한 확인.
 4. M7 이후: 데모 앱에서 검색 → 하이라이트 → next/prev 이동 시각 확인.
 5. 0.2.0 이후: 데모 앱 "0.2.0 통합 시연 체크리스트"(선택·메뉴·영역·하이라이트
    저장/복원·스캔 문서 OCR)를 양 플랫폼에서 수행.

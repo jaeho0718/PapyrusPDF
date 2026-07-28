@@ -1,12 +1,12 @@
 ---
 name: gitflow-workflow
 description: >
-  Papyrus 저장소의 gitflow 규칙. 브랜치 생성/네이밍, 커밋 메시지, PR 생성·병합 절차가
+  PapyrusPDF 저장소의 gitflow 규칙. 브랜치 생성/네이밍, 커밋 메시지, PR 생성·병합 절차가
   필요한 모든 git 작업 전에 이 스킬을 참조할 것. "브랜치 만들어줘", "커밋해줘", "PR 올려줘",
   "릴리스 준비" 요청 시 반드시 사용한다.
 ---
 
-# gitflow-workflow — Papyrus 브랜치·PR 규칙
+# gitflow-workflow — PapyrusPDF 브랜치·PR 규칙
 
 ## 브랜치 구조
 
@@ -25,7 +25,7 @@ description: >
 
 1. **develop과 main에는 직접 push하지 않는다.** 반드시 PR을 경유한다. 로컬 `pre-push` 훅과
    GitHub 브랜치 보호(required check: `lint-build-test`)가 이를 강제한다.
-2. 훅 우회(`--no-verify`, `PAPYRUS_ALLOW_PROTECTED_PUSH=1`)는 사용하지 않는다. 훅이
+2. 훅 우회(`--no-verify`, `PAPYRUSPDF_ALLOW_PROTECTED_PUSH=1`)는 사용하지 않는다. 훅이
    차단하면 원인을 고치는 것이 규칙이다.
 3. 새 feature는 항상 최신 develop에서 분기한다:
    `git fetch origin && git checkout develop && git pull && git checkout -b feature/...`

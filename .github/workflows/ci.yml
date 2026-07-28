@@ -37,7 +37,7 @@ jobs:
 
       - name: DocC (warnings as errors)
         run: |
-          for T in PapyrusCore PapyrusRendering PapyrusUI Papyrus; do
+          for T in PapyrusPDFCore PapyrusPDFRendering PapyrusPDFUI PapyrusPDF; do
             swift package generate-documentation --target "$T" --warnings-as-errors
           done
 
@@ -65,4 +65,4 @@ jobs:
           swift --version
 
       - name: Performance gate (release)
-        run: PAPYRUS_PERF=1 PAPYRUS_PERF_SCALE=2 swift test -c release --filter PerformanceGateTests
+        run: PAPYRUSPDF_PERF=1 PAPYRUSPDF_PERF_SCALE=2 swift test -c release --filter PerformanceGateTests

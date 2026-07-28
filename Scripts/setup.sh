@@ -1,5 +1,5 @@
 #!/bin/bash
-# Papyrus 개발 환경 셋업 — 클론 후 1회 실행.
+# PapyrusPDF 개발 환경 셋업 — 클론 후 1회 실행.
 #   ./Scripts/setup.sh
 # 1) git 훅 활성화 (pre-commit: SwiftLint strict, pre-push: 보호 브랜치 차단)
 # 2) SwiftLint 설치 확인
