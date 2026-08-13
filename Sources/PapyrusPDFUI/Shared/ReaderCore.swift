@@ -11,6 +11,9 @@ package struct ReaderViewState: Sendable, Equatable {
   package let visiblePageRange: Range<Int>
   /// 현재 줌 배율.
   package let zoomScale: CGFloat
+  /// 유효 줌 범위 [fit-width, 최대]. 하한은 `min(fit, max)`로 위생 처리돼 항상 유효한
+  /// 범위다 (병적으로 좁은 콘텐츠 × 넓은 뷰포트에서 fit > max가 될 수 있다).
+  package let zoomRange: ClosedRange<CGFloat>
 }
 
 /// 레이아웃·가상화·렌더 요청·탐색의 수렴점. 플랫폼 공유 ~85%의 몸통이다
@@ -30,11 +33,32 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 상태 변경 통지 (모델이 구독. 값이 실제로 바뀔 때만 호출).
   package var onStateChange: ((ReaderViewState) -> Void)?
 
+  /// 호스트 부착 여부 — 이동·줌 명령의 실행 가능 조건. 모델의 보류 게이트가 읽는다.
+  package var isHostAttached: Bool {
+    self.host != nil
+  }
+
+  /// 호스트 부착 직후 1회 통지 (`attach(to:)` 내부, 초기 스크롤 확정 전에 호출).
+  /// 모델이 보류 이동·줌 명령 재생에 사용한다.
+  package var onHostAttached: (() -> Void)?
+
   /// 부착된 호스트 (미부착이면 `nil`).
   ///
   /// 내부 상태는 `ReaderCore+Fetching.swift` 확장(같은 모듈)도 참조하므로 `private`가
   /// 아니라 모듈 스코프로 둔다 (M5 `TileRenderQueue`+확장 파일 분리와 동일 패턴).
   weak var host: (any ReaderScrollHost)?
+
+  /// 진행 중 애니메이션 이동의 목표 (없으면 nil). 뷰포트 리사이즈 시 중간 오프셋
+  /// 포착 대신 이 목표를 재실행한다 (#20). destination은 실행 시점에 구체화된 값,
+  /// zoom은 심볼릭(.fitWidth/.keep 유지). `ReaderCore+Navigation.swift`(같은 모듈)의
+  /// `perform`·이벤트 싱크 메서드도 대입하므로 모듈 스코프로 둔다 (M5 관례) — 외부
+  /// 소비자에게는 여전히 노출되지 않는다.
+  var inFlightNavigation: ReaderNavigationIntent?
+
+  /// `attach(to:)` 이후 이동·줌이 1회 이상 실행됐는지 — 보류 재생이 초기
+  /// `scrollTo(0, fit)`를 대체했는지 판정용. `ReaderCore+Navigation.swift`(같은
+  /// 모듈)의 `perform`도 대입하므로 모듈 스코프로 둔다 (M5 관례).
+  var hasNavigatedSinceAttach = false
 
   /// 실체화된 페이지 (인덱스 → 컨트롤러).
   var controllers: [Int: PageLayerController] = [:]
@@ -172,16 +196,24 @@ package final class ReaderCore: ReaderHostEventSink {
     }
   }
 
-  /// 호스트에 부착: contentSize·줌 한계 설정, 초기 fit-width 줌, 첫 실체화.
+  /// 호스트에 부착: contentSize·줌 한계 설정, 보류 이동·줌 재생(있으면), 없으면 초기
+  /// fit-width 줌 + 첫 실체화.
+  ///
+  /// 보류 재생을 초기 스크롤보다 먼저 수행한다 — 페이지 0을 실체화·페치했다가 즉시
+  /// 목표 페이지로 점프하는 낭비를 없애고, 첫 표시 프레임부터 목표 위치가 보이게 한다.
   /// - Parameter host: 부착할 스크롤 호스트.
   package func attach(to host: any ReaderScrollHost) {
     self.host = host
     self.menuPresenting = host as? ReaderMenuPresenting
     host.setContentSize(self.layout.contentSize)
-    let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
+    let fit = self.clampedFitScale(forViewportWidth: host.viewportSize.width)
     host.setZoomLimits(minimum: fit, maximum: ReaderLayoutMetrics.maxZoomScale)
-    host.scrollTo(contentY: 0, zoomScale: fit, animated: false)
-    self.currentBucket = ScaleBucket(snapping: fit)
+    self.hasNavigatedSinceAttach = false
+    self.onHostAttached?()
+    if !self.hasNavigatedSinceAttach {
+      host.scrollTo(contentY: 0, zoomScale: fit, animated: false)
+    }
+    self.currentBucket = ScaleBucket(snapping: host.zoomScale)
     self.hostViewportDidChange()
   }
 
@@ -201,6 +233,7 @@ package final class ReaderCore: ReaderHostEventSink {
     self.controllers.removeAll()
     self.host = nil
     self.menuPresenting = nil
+    self.inFlightNavigation = nil
 
     self.searchCoordinator?.cancel()
     self.searchHighlights.removeAll()
@@ -227,8 +260,10 @@ package final class ReaderCore: ReaderHostEventSink {
     let visible = self.layout.visiblePageRange(in: rect)
     let current =
       VisibleRangeCalculator.currentPageIndex(layout: self.layout, visibleContentRect: rect) ?? 0
+    let fit = self.clampedFitScale(forViewportWidth: host.viewportSize.width)
     let state = ReaderViewState(
-      currentPageIndex: current, visiblePageRange: visible, zoomScale: zoom
+      currentPageIndex: current, visiblePageRange: visible, zoomScale: zoom,
+      zoomRange: fit...ReaderLayoutMetrics.maxZoomScale
     )
     if state != self.lastState {
       self.lastState = state
@@ -271,65 +306,6 @@ package final class ReaderCore: ReaderHostEventSink {
       self.fillCacheHits(forPage: pageIndex, controller: controller, host: host)
     }
     self.hostViewportDidChange()
-  }
-
-  /// 뷰포트 크기가 바뀌었다 (회전·창 리사이즈) — 줌 한계 재계산 + 위치 보존.
-  package func hostViewportSizeDidChange() {
-    guard let host else {
-      return
-    }
-    let position = self.capturePosition()
-    let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
-    host.setZoomLimits(minimum: fit, maximum: ReaderLayoutMetrics.maxZoomScale)
-    if let position {
-      self.restore(position, animated: false)
-    } else {
-      self.hostViewportDidChange()
-    }
-  }
-
-  // MARK: - 탐색 (§4.6)
-
-  /// 페이지 상단으로 스크롤 (인덱스 클램프, 빈 문서 무시).
-  /// - Parameters:
-  ///   - index: 이동할 페이지 인덱스.
-  ///   - animated: 애니메이션 여부.
-  package func goToPage(_ index: Int, animated: Bool) {
-    guard self.layout.pageCount > 0, let host else {
-      return
-    }
-    let clamped = min(max(index, 0), self.layout.pageCount - 1)
-    guard let frame = self.layout.pageFrame(at: clamped) else {
-      return
-    }
-    let y = max(0, frame.minY - ReaderLayoutMetrics.pageSpacing / 2)
-    host.scrollTo(contentY: y, zoomScale: nil, animated: animated)
-  }
-
-  /// 현재 위치 포착 (빈 문서·미부착이면 nil).
-  /// - Returns: 현재 위치 스냅숏.
-  package func capturePosition() -> ReaderPosition? {
-    guard let host else {
-      return nil
-    }
-    return self.layout.capturePosition(
-      viewportTopY: host.visibleContentRect.minY, zoomScale: host.zoomScale
-    )
-  }
-
-  /// 위치 복원 (줌 → 오프셋 순서로 적용, 전부 클램프).
-  /// - Parameters:
-  ///   - position: 복원할 위치 스냅숏.
-  ///   - animated: 애니메이션 여부.
-  package func restore(_ position: ReaderPosition, animated: Bool) {
-    guard let host else {
-      return
-    }
-    let fit = self.layout.fitWidthScale(forViewportWidth: host.viewportSize.width)
-    let zoom = min(max(position.zoomScale, fit), ReaderLayoutMetrics.maxZoomScale)
-    let y = self.layout.contentY(for: position)
-    host.scrollTo(contentY: y, zoomScale: zoom, animated: animated)
-    self.hostZoomInteractionDidEnd()
   }
 
   // MARK: - 테스트 관찰

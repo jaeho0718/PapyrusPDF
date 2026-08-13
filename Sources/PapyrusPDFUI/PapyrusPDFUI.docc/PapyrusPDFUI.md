@@ -19,6 +19,13 @@ SwiftUI 퍼사드와 가상화 스크롤 뷰어.
 - ``ReaderSearchState``
 - ``ReaderPosition``
 
+### 줌 제어
+
+- ``PapyrusPDFReaderModel/setZoom(_:animated:)``
+- ``PapyrusPDFReaderModel/fitWidth(animated:)``
+- ``PapyrusPDFReaderModel/zoomRange``
+- ``PapyrusPDFReaderModel/zoomScale``
+
 ### 텍스트 선택
 
 - ``PapyrusPDFReaderModel/selection``

@@ -46,6 +46,11 @@ final class FlippedDocumentView: NSView {
 /// - `NSScrollView.didEndLiveMagnifyNotification` → `hostZoomInteractionDidEnd`
 ///   (+ 프로그램적 줌 변경 후에는 직접 재스냅 호출).
 /// - `setFrameSize`/`viewDidEndLiveResize` → `hostViewportSizeDidChange`.
+/// - `NSScrollView.willStartLiveScrollNotification`/`willStartLiveMagnifyNotification`
+///   → `hostScrollInteractionWillBegin` (#20).
+/// - `scrollTo(animated: true)`는 적용 직후 동기로 `hostScrollAnimationDidEnd`를 호출한다
+///   — macOS는 즉시 적용되므로 애니메이션 완료 = scrollTo 반환 시점 (`ReaderHostEventSink`
+///   계약, §2.2).
 @MainActor
 final class ReaderScrollHostView: NSView, ReaderScrollHost {
   /// 호스트 이벤트 수신부 (코어가 자신을 대입한다). 코어는 `ReaderSelectionEventSink`도
@@ -148,6 +153,14 @@ final class ReaderScrollHostView: NSView, ReaderScrollHost {
       self, selector: #selector(self.didEndLiveMagnify),
       name: NSScrollView.didEndLiveMagnifyNotification, object: self.scrollView
     )
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(self.willStartLiveInteraction),
+      name: NSScrollView.willStartLiveScrollNotification, object: self.scrollView
+    )
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(self.willStartLiveInteraction),
+      name: NSScrollView.willStartLiveMagnifyNotification, object: self.scrollView
+    )
   }
 
   /// 프레임 크기 변화 — 뷰포트 크기 변화를 감지해 코어에 통지한다.
@@ -182,7 +195,10 @@ final class ReaderScrollHostView: NSView, ReaderScrollHost {
   /// 스크롤·줌을 이동한다 (`zoomScale` nil이면 현재 줌 유지).
   ///
   /// 프로그램적 매그니피케이션 변경은 `didEndLiveMagnifyNotification`을 발생시키지
-  /// 않으므로, 여기서 직접 `hostZoomInteractionDidEnd()`를 호출해 재스냅한다.
+  /// 않으므로, 여기서 직접 `hostZoomInteractionDidEnd()`를 호출해 재스냅한다. macOS는
+  /// 항상 즉시 적용되므로, `animated == true`였다면 적용 직후 동기로
+  /// `hostScrollAnimationDidEnd()`를 호출해 `ReaderHostEventSink` 계약(§2.2)을
+  /// 이행한다 — 즉시 완료도 완료다.
   /// - Parameters:
   ///   - contentY: 목표 콘텐츠 공간 Y 좌표.
   ///   - zoomScale: 목표 줌 배율 (nil이면 유지).
@@ -195,6 +211,9 @@ final class ReaderScrollHostView: NSView, ReaderScrollHost {
     self.documentView.scroll(point)
     if zoomScale != nil {
       self.eventSink?.hostZoomInteractionDidEnd()
+    }
+    if animated {
+      self.eventSink?.hostScrollAnimationDidEnd()
     }
   }
 
@@ -220,6 +239,14 @@ final class ReaderScrollHostView: NSView, ReaderScrollHost {
   @objc
   private func didEndLiveMagnify(_ notification: Notification) {
     self.eventSink?.hostZoomInteractionDidEnd()
+  }
+
+  /// 라이브 스크롤·매그니피케이션 시작 통지 — 사용자가 조작권을 가져갔으므로 진행
+  /// 중 프로그램 이동의 목표를 폐기한다 (#20).
+  /// - Parameter notification: 시작 통지.
+  @objc
+  private func willStartLiveInteraction(_ notification: Notification) {
+    self.eventSink?.hostScrollInteractionWillBegin()
   }
 }
 

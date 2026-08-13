@@ -162,7 +162,7 @@ Sources/
 - macOS는 `isFlipped = true` NSView로 좌표계를 iOS와 통일 — 플랫폼 분기 대부분 제거.
 - **레이아웃 엔진**: 파서의 PageRecord에서 페이지 크기 획득(CGPDFDocument 불필요 → 열자마자 레이아웃 완성). 누적 Y 오프셋 배열 1회 계산(5,000페이지 = 40KB), 프레임 조회 O(1), 오프셋→페이지 이진 탐색 O(log n).
 - **가상화**: visibleRange ±2페이지만 `PageLayerController` 실체화, 재활용 풀(캡 ~8). 이탈 시 풀 반환 + 타일 요청 취소.
-- 탐색: goToPage / 목차 목적지 이동 / `ReaderPosition`(pageIndex + 페이지 내 정규화 오프셋 + zoom, Codable) 저장·복원.
+- 탐색: goToPage / 목차 목적지 이동 / `ReaderPosition`(pageIndex + 페이지 내 정규화 오프셋 + zoom, Codable) 저장·복원 / `setZoom`·`fitWidth`·`zoomRange` 줌 제어. 이동·줌 명령은 코어 연결 ∧ 호스트 부착이 갖춰질 때까지 모델 슬롯(이동·줌 각 1건, 최신 유지)에 보류 후 부착 즉시 무애니메이션 재생 — 초기 fit 스크롤을 대체한다. 애니메이션 이동은 목표를 심볼릭(.fitWidth/.keep은 규칙으로) 래치하고, 뷰포트 리사이즈 시 중간 오프셋 포착 대신 목표를 새 지오메트리에서 재해석해 확정 점프한다.
 - M5/M6 경계 계약: 가시 캐시 조회는 동기(nonisolated Mutex 캐시), 미스는 visible 등급 async 페치, 프리페치·폐기는 `updateViewport` 위임.
 - **검색**: `PapyrusPDFDocument.search()` → `AsyncThrowingStream<SearchResult>` (병렬 텍스트 워밍업, 페이지 순서대로 방출). 매칭은 Foundation `range(of:options:[.caseInsensitive,.diacriticInsensitive])` 반복 — 폴딩 길이 변화로 인한 오프셋 매핑 버그 회피. 결과 quad는 run + advances에서 보간. 뷰어는 페이지당 `CAShapeLayer` 하나로 전체 quad 패스 오버레이, 현재 매치는 강조 레이어, next/prev 시 스크롤 이동. 매치 캡: 페이지당 1,000 / 문서당 10,000 — 초과 시 정상 종료 (스트림 무한 버퍼 정책의 안전 근거).
 - **선택**: 제스처(플랫폼 입력) → 콘텐츠 공간 점 → 페이지 표시 공간 분해 →
@@ -222,10 +222,13 @@ public final class PapyrusPDFReaderModel {
     var currentPageIndex: Int { get }
     var visiblePageRange: Range<Int> { get }
     var zoomScale: CGFloat { get }
+    var zoomRange: ClosedRange<CGFloat> { get }   // [fit-width, max], 미부착 시 1...1
     func goToPage(_ index: Int, animated: Bool = true)
     func go(to destination: OutlineDestination, animated: Bool = true)
     func capturePosition() -> ReaderPosition?
     func restore(_ position: ReaderPosition)
+    func setZoom(_ scale: CGFloat, animated: Bool = true)
+    func fitWidth(animated: Bool = true)
 }
 // 값 타입: ReaderPosition(pageIndex/normalizedOffset/zoomScale, Codable),
 //         ReaderLoadState(loading/ready/failed)

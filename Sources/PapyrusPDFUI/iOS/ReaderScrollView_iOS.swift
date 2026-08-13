@@ -7,7 +7,11 @@ import UIKit
 ///
 /// - `viewForZooming`은 `documentView` — 핀치 중엔 transform 확대(즉시·흐릿, 가정 3).
 /// - `scrollViewDidScroll`/`DidZoom` → `sink.hostViewportDidChange()`.
-/// - `scrollViewDidEndZooming` → `sink.hostZoomInteractionDidEnd()`.
+/// - `scrollViewDidEndZooming` → `sink.hostZoomInteractionDidEnd()` +
+///   `sink.hostScrollAnimationDidEnd()`.
+/// - `scrollViewDidEndScrollingAnimation` → `sink.hostScrollAnimationDidEnd()` (#20).
+/// - `scrollViewWillBeginZooming`/`scrollViewWillBeginDragging` →
+///   `sink.hostScrollInteractionWillBegin()` (#20).
 /// - `layoutSubviews` 크기 변화 → `sink.hostViewportSizeDidChange()`.
 /// - `contentInsetAdjustmentBehavior = .never` (레이아웃 엔진 여백이 유일 원천).
 /// - `visibleContentRect = CGRect(origin: contentOffset/zoom, size: bounds.size/zoom)`.
@@ -157,12 +161,28 @@ final class ReaderScrollHostView: UIView, ReaderScrollHost, UIScrollViewDelegate
     _ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat
   ) {
     self.eventSink?.hostZoomInteractionDidEnd()
+    self.eventSink?.hostScrollAnimationDidEnd()
+  }
+
+  /// 프로그램적 애니메이션 스크롤(오프셋)이 끝났다 — 인플라이트 래치 해제 통지.
+  /// - Parameter scrollView: 애니메이션이 끝난 뷰.
+  func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+    self.eventSink?.hostScrollAnimationDidEnd()
+  }
+
+  /// 줌 제스처(핀치) 시작 — 진행 중 프로그램 이동의 목표를 폐기한다.
+  /// - Parameters:
+  ///   - scrollView: 확대될 뷰.
+  ///   - view: 확대 대상 뷰.
+  func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+    self.eventSink?.hostScrollInteractionWillBegin()
   }
 
   /// 스크롤 시작 — 표시 중인 선택 메뉴를 닫는다.
   /// - Parameter scrollView: 스크롤될 뷰.
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
     self.editMenuPresenter.handleScrollWillBegin()
+    self.eventSink?.hostScrollInteractionWillBegin()
   }
 
   /// 드래그 종료 — 감속 없이 즉시 정지하면 메뉴 재표시를 시도한다.
