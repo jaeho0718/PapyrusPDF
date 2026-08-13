@@ -51,4 +51,16 @@ package protocol ReaderHostEventSink: AnyObject {
 
   /// 뷰포트 크기가 바뀌었다 (회전·창 리사이즈) — 줌 한계 재계산 + 위치 보존.
   func hostViewportSizeDidChange()
+
+  /// 프로그램적 애니메이션 이동(`scrollTo(animated: true)`)이 완료됐다.
+  ///
+  /// 호스트 계약: `scrollTo`가 `animated: true`로 호출됐다면, 이동이 실제로
+  /// 애니메이션됐든 즉시 적용됐든(macOS) **반드시 최종적으로 1회 이상** 이 메서드를
+  /// 호출해야 한다. 미호출 시 코어의 인플라이트 래치가 남는다 (스테일 래치는 목표 ==
+  /// 현재 위치라 양성이지만, 계약으로 원천 봉쇄한다).
+  func hostScrollAnimationDidEnd()
+
+  /// 사용자 스크롤·줌 제스처가 시작됐다 — 진행 중 프로그램 이동의 목표를 폐기한다
+  /// (사용자가 조작권을 가져갔다).
+  func hostScrollInteractionWillBegin()
 }

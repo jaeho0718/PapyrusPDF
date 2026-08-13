@@ -264,6 +264,15 @@ final class MockScrollHost: ReaderScrollHost {
   /// `scrollTo` 호출 기록 (순서대로).
   var scrollToCalls: [ScrollToCall] = []
 
+  /// `animated == true`인 `scrollTo` 호출 직후 동기로 실행할 클로저 (기본 `nil`).
+  ///
+  /// macOS 호스트는 매그니피케이션·스크롤이 항상 즉시 적용되므로 `scrollTo` 안에서
+  /// 동기로 완료 통지(`hostScrollAnimationDidEnd()`)를 보낸다 — 이 재진입 순서를
+  /// 재현하려는 테스트가 이 클로저에 그 호출을 담아 주입한다. `nil`이면(기본값)
+  /// 완료 통지가 자동으로 나가지 않아 "애니메이션 진행 중" 상태를 결정적으로
+  /// 재현하는 수단이 된다 — 완료는 테스트가 직접 코어 메서드를 호출해 주입한다.
+  var synchronousAnimationCompletion: (() -> Void)?
+
   /// `presentSelectionMenu` 호출 기록 (순서대로) — 항목·앵커 사각형.
   var presentedMenus: [(items: [ResolvedMenuItem], contentRect: CGRect)] = []
 
@@ -280,13 +289,17 @@ final class MockScrollHost: ReaderScrollHost {
     self.zoomLimits = (minimum, maximum)
   }
 
-  /// 스크롤·줌 호출을 기록하고 줌 배율을 갱신한다.
+  /// 스크롤·줌 호출을 기록하고 줌 배율을 갱신한다. `animated`이면
+  /// `synchronousAnimationCompletion`이 설정된 경우 그 자리에서 호출한다.
   func scrollTo(contentY: CGFloat, zoomScale: CGFloat?, animated: Bool) {
     self.scrollToCalls.append(
       ScrollToCall(contentY: contentY, zoomScale: zoomScale, animated: animated)
     )
     if let zoomScale {
       self.zoomScale = zoomScale
+    }
+    if animated {
+      self.synchronousAnimationCompletion?()
     }
   }
 }

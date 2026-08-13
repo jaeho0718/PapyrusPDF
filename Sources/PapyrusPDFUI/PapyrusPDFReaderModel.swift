@@ -34,14 +34,6 @@ public enum ReaderLoadState: Sendable, Equatable {
   case failed(PapyrusPDFError)
 }
 
-/// 연결 전에 접수된 탐색 명령 (연결 직후 1회 재생 — §4.1).
-enum PendingReaderCommand {
-  /// 보류된 `goToPage` 호출.
-  case goToPage(index: Int, animated: Bool)
-  /// 보류된 `restore` 호출.
-  case restore(ReaderPosition)
-}
-
 /// 검색 요약 상태입니다 (``PapyrusPDFReaderModel/searchState``로 관찰합니다).
 public struct ReaderSearchState: Sendable, Equatable {
   /// 진행 단계입니다.
@@ -87,8 +79,16 @@ public final class PapyrusPDFReaderModel {
   public private(set) var currentPageIndex = 0
   /// 가시 페이지 범위입니다 (적재 전 0..<0).
   public private(set) var visiblePageRange: Range<Int> = 0..<0
-  /// 현재 줌 배율입니다 (적재 전 1).
+  /// 현재 줌 배율입니다 (적재 전 1). fit 대비 배율 퍼센트는
+  /// `zoomScale / zoomRange.lowerBound`로 계산합니다.
   public private(set) var zoomScale: CGFloat = 1
+
+  /// 현재 유효한 줌 범위입니다 (하한 = fit-width 배율, 상한 = 최대 배율).
+  ///
+  /// 줌 버튼의 활성 판정(`zoomScale <= zoomRange.lowerBound`이면 축소 비활성)과
+  /// fit 대비 배율 퍼센트 계산(`zoomScale / zoomRange.lowerBound`)에 사용합니다.
+  /// 뷰어가 화면에 붙기 전에는 `1...1`이며, 부착·뷰포트 크기 변경 시 자동 갱신됩니다.
+  public private(set) var zoomRange: ClosedRange<CGFloat> = 1...1
 
   /// 검색 상태입니다 (기본 `.idle`).
   public private(set) var searchState: ReaderSearchState = .idle
@@ -116,8 +116,14 @@ public final class PapyrusPDFReaderModel {
   /// 마지막으로 적재를 시작한 문서의 신원 (문서 교체 판정용).
   private var lastDocumentID: ObjectIdentifier?
 
-  /// 연결 전 접수되어 연결 직후 재생될 탐색 명령 (최신 것만 유지).
-  private var pendingCommand: PendingReaderCommand?
+  /// 연결 전 접수되어 연결 직후 재생될 탐색 명령 (최신 것만 유지). 파일 분할
+  /// (`+Navigation.swift`) 접근을 위해 internal.
+  var pendingCommand: PendingReaderCommand?
+
+  /// 연결 전 접수되어 연결 직후 재생될 줌 명령 (최신 것만 유지 — 탐색 명령과 별도
+  /// 슬롯이라 서로를 밀어내지 않는다). 파일 분할(`+Navigation.swift`) 접근을 위해
+  /// internal.
+  var pendingZoom: PendingZoomCommand?
 
   /// 연결 전 접수되어 연결 직후 재생될 검색 (최신 것만 유지 — 탐색 명령과 별도 슬롯이라
   /// 서로를 밀어내지 않는다).
@@ -129,57 +135,6 @@ public final class PapyrusPDFReaderModel {
 
   /// 모델을 만듭니다.
   public init() {}
-
-  /// 페이지 상단으로 이동합니다 (범위 밖은 클램프).
-  ///
-  /// 페이지 번호 입력창이나 커스텀 목차 UI에서 사용자가 특정 페이지를 선택했을 때
-  /// 호출합니다. `PapyrusPDFReader`가 아직 적재를 마치지 않은 상태에서 호출해도 안전합니다 —
-  /// 요청이 보류됐다가 적재 완료 직후 자동으로 재생됩니다.
-  /// - Parameters:
-  ///   - index: 이동할 페이지 인덱스입니다.
-  ///   - animated: 애니메이션 여부입니다.
-  public func goToPage(_ index: Int, animated: Bool = true) {
-    guard let core else {
-      self.pendingCommand = .goToPage(index: index, animated: animated)
-      return
-    }
-    core.goToPage(index, animated: animated)
-  }
-
-  /// 목차 목적지로 이동합니다 (`OutlineDestination.pageIndex` — 현재는 페이지 단위 목적지입니다).
-  ///
-  /// `document.outline`에서 얻은 항목을 사용자가 목차 사이드바에서 선택했을 때 그
-  /// `destination`을 그대로 넘기면 됩니다.
-  /// - Parameters:
-  ///   - destination: 이동할 목차 목적지입니다.
-  ///   - animated: 애니메이션 여부입니다.
-  public func go(to destination: OutlineDestination, animated: Bool = true) {
-    self.goToPage(destination.pageIndex, animated: animated)
-  }
-
-  /// 현재 위치 스냅숏입니다 (적재 전 nil).
-  ///
-  /// 화면이 사라지거나 앱이 백그라운드로 전환되는 시점에 호출해 `Codable`인 반환값을
-  /// 영구 저장소(예: `UserDefaults`)에 저장해 두면, 다음에 같은 문서를 열 때
-  /// ``restore(_:)``로 이어 볼 수 있습니다.
-  /// - Returns: 현재 위치 스냅숏, 미연결이면 `nil`입니다.
-  public func capturePosition() -> ReaderPosition? {
-    self.core?.capturePosition()
-  }
-
-  /// 위치를 복원합니다 (적재 전 호출 시 보류 후 적재 직후 적용).
-  ///
-  /// 이전에 ``capturePosition()``으로 저장해 둔 위치를 다시 불러올 때 사용합니다.
-  /// 모델을 만든 직후, `PapyrusPDFReader`가 화면에 붙어 적재를 마치기 전에 호출해도
-  /// 안전합니다 — 적재 완료 시점에 자동으로 적용됩니다.
-  /// - Parameter position: 복원할 위치 스냅숏입니다.
-  public func restore(_ position: ReaderPosition) {
-    guard let core else {
-      self.pendingCommand = .restore(position)
-      return
-    }
-    core.restore(position, animated: true)
-  }
 
   /// 검색을 시작합니다. 빈(공백뿐) query는 `clearSearch()`와 동일합니다. 연결 전 호출은
   /// 보류 후 연결 직후 재생됩니다. 디바운스는 하지 않습니다 — 호출 즉시 이전 검색을
@@ -284,12 +239,14 @@ public final class PapyrusPDFReaderModel {
     self.core?.onSearchStateChange = nil
     self.core?.onSelectionChange = nil
     self.core?.onRegionSelectionChange = nil
+    self.core?.onHostAttached = nil
     self.core = nil
     self.loadState = .loading
     self.pageCount = 0
     self.currentPageIndex = 0
     self.visiblePageRange = 0..<0
     self.zoomScale = 1
+    self.zoomRange = 1...1
     self.searchState = .idle
     self.selection = nil
     self.selectedRegion = nil
@@ -309,6 +266,10 @@ public final class PapyrusPDFReaderModel {
   ///
   /// 영역 등록부 재생을 `replayPendingSelection()`보다 먼저 수행한다 — 프로그램적
   /// `select(_:)`가 재생되기 전에 영역 등록이 끝나 있어야 상호 배타 판정이 결정적이다.
+  /// 이동·줌 명령의 재생은 코어의 호스트 부착 통지(`onHostAttached`)에 배선한다 —
+  /// 연결 시점엔 아직 호스트가 없을 수 있으므로(#19), 재생 트리거를 "코어 연결"이
+  /// 아니라 "호스트 부착"으로 옮긴다. 이미 호스트가 부착된 코어(재부착 등 방어적
+  /// 경로)라면 여기서도 즉시 1회 재생한다 — 호출 순서 가정에 결합하지 않는다.
   /// - Parameter core: 연결할 코어.
   func attach(core: ReaderCore) {
     self.core = core
@@ -325,12 +286,17 @@ public final class PapyrusPDFReaderModel {
     core.onRegionSelectionChange = { [weak self] region in
       self?.selectedRegion = region
     }
+    core.onHostAttached = { [weak self] in
+      self?.replayNavigationCommands()
+    }
     self.loadState = .ready
-    self.replayPendingCommand()
     self.replayPendingSearch()
     self.replayRegions()
     self.replayHighlights()
     self.replayPendingSelection()
+    if core.isHostAttached {
+      self.replayNavigationCommands()
+    }
   }
 
   /// 코어와의 연결을 해제한다 (`ReaderSession` 전용).
@@ -339,6 +305,7 @@ public final class PapyrusPDFReaderModel {
     self.core?.onSearchStateChange = nil
     self.core?.onSelectionChange = nil
     self.core?.onRegionSelectionChange = nil
+    self.core?.onHostAttached = nil
     self.core = nil
   }
 
@@ -354,20 +321,7 @@ public final class PapyrusPDFReaderModel {
     self.currentPageIndex = state.currentPageIndex
     self.visiblePageRange = state.visiblePageRange
     self.zoomScale = state.zoomScale
-  }
-
-  /// 연결 전 접수된 탐색 명령을 1회 재생한다.
-  private func replayPendingCommand() {
-    guard let command = self.pendingCommand else {
-      return
-    }
-    self.pendingCommand = nil
-    switch command {
-    case let .goToPage(index, animated):
-      self.goToPage(index, animated: animated)
-    case let .restore(position):
-      self.restore(position)
-    }
+    self.zoomRange = state.zoomRange
   }
 
   /// 연결 전 접수된 검색을 1회 재생한다.
