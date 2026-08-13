@@ -251,7 +251,7 @@ public final class PapyrusPDFReaderModel {
 - 뷰어: `ReaderLayoutEngine`은 순수 수학이라 집중 테스트(`Tests/PapyrusPDFUITests` — PapyrusPDFRenderingTests 전례를 따르는 별도 타겟). 스크롤 동작은 데모 앱에서 수동 검증.
 - 성능: 픽스처 빌더로 5,000페이지 합성 PDF 생성 → 열기+pageCount < 250ms, warm `page(at:)` < 1ms 등을 `ContinuousClock` 수동 측정 + `#expect` 판정으로 게이트 (env 플래그 뒤에). `.timeLimit` trait은 최소 단위가 분이라 ms 게이트에 쓸 수 없고, 행(hang) 가드로만 사용.
 - `Examples/PapyrusPDFDemo` 앱 (별도 Xcode 프로젝트) — Instruments로 스크롤/메모리 프로파일링.
-- 퍼징(M8): 시드 픽스처 + 결정론적 뮤테이터(`FuzzCaseID` 트리플로 완전 재현) + 케이스별 벽시계 가드. CI 상시 스모크(고정 시드) / 로컬 심층(`PAPYRUSPDF_FUZZ=1`) 이원화. 발견 결함은 트리플 회귀 코퍼스로 영구 고정.
+- 퍼징(M8): 시드 픽스처 + 결정론적 뮤테이터(`FuzzCaseID` 트리플로 완전 재현) + 케이스별 벽시계 가드(2단 확정 판정: 스크리닝 2초 초과 시 4배 예산으로 1회 재실행해 재차 초과할 때만 행으로 확정 — 공유 CI 러너의 CPU 경합 거짓 양성 차단, 진짜 행은 항상 재초과하므로 탐지력 무손실). CI 상시 스모크(고정 시드) / 로컬 심층(`PAPYRUSPDF_FUZZ=1`) 이원화. 발견 결함은 트리플 회귀 코퍼스로 영구 고정.
 
 ## 구현 마일스톤
 

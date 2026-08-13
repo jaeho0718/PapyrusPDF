@@ -23,21 +23,30 @@ enum FuzzOutcome: Sendable, Equatable {
 
 /// 퍼즈 런 설정.
 struct FuzzBudget: Sendable {
-  /// 케이스 1개의 벽시계 예산 (기본 2초 — 정상 케이스는 µs~ms 단위이므로 3자릿수 여유).
+  /// 케이스 1개의 스크리닝(1차) 벽시계 예산 (기본 2초 — 정상 케이스는 µs~ms 단위이므로
+  /// 3자릿수 여유).
   var perCase: Duration
+
+  /// 확정 재실행(2차) 예산 (기본 `perCase * 4`). 스크리닝 초과가 CPU 경합 탓인지 진짜
+  /// 행인지 가르는 예산 — 진짜 행은 어떤 예산에서도 재초과하므로 크게 잡아도 탐지력이
+  /// 줄지 않고, 공유 러너의 시작 버스트(실측 5초 미만)보다 충분히 길어야 거짓 양성을 거른다.
+  var confirmation: Duration
 
   /// 병렬 폭 (기본 `min(activeProcessorCount, 8)`).
   var width: Int
 
   /// 예산을 생성한다.
   /// - Parameters:
-  ///   - perCase: 케이스 1개의 벽시계 예산 (기본 2초).
+  ///   - perCase: 케이스 1개의 스크리닝 벽시계 예산 (기본 2초).
+  ///   - confirmation: 확정 재실행 예산 (기본 `nil` → `perCase * 4`).
   ///   - width: 병렬 폭 (기본 `min(activeProcessorCount, 8)`).
   init(
     perCase: Duration = .seconds(2),
+    confirmation: Duration? = nil,
     width: Int = min(ProcessInfo.processInfo.activeProcessorCount, 8)
   ) {
     self.perCase = perCase
+    self.confirmation = confirmation ?? perCase * 4
     self.width = width
   }
 }
@@ -92,7 +101,7 @@ enum FuzzExecutor {
         group.addTask {
           Self.recordSlotStart(slot: slot, caseID: caseID)
           let outcome = await Self.runOne(
-            caseID: caseID, surface: surface, perCase: budget.perCase
+            caseID: caseID, surface: surface, budget: budget
           )
           Self.recordSlotEnd(slot: slot)
           guard case .timedOut = outcome else {
@@ -118,12 +127,12 @@ enum FuzzExecutor {
     return findings
   }
 
-  /// 케이스 하나를 실행한다: 입력 생성(순수 CPU) 후 예산 안에서 표면을 완주시킨다.
+  /// 케이스 하나를 실행한다: 입력 생성(순수 CPU) 후 2단 판정으로 표면을 완주시킨다.
   private static func runOne(
-    caseID: FuzzCaseID, surface: FuzzSurface, perCase: Duration
+    caseID: FuzzCaseID, surface: FuzzSurface, budget: FuzzBudget
   ) async -> FuzzOutcome {
     let input = caseID.makeInput()
-    return await Self.withTimeout(perCase, surfaceLabel: Self.label(for: surface)) {
+    return await Self.withConfirmedTimeout(budget, surfaceLabel: Self.label(for: surface)) {
       await Self.execute(surface: surface, input: input)
     }
   }
@@ -168,30 +177,70 @@ extension FuzzExecutor {
     }
   }
 
-  /// 테스트 전용 훅 (테스트 포인트 6) — 실제 문서 파싱 대신 인위적 지연들로 타임아웃
-  /// 판정·즉시 중단 경로를 검증한다. `run(cases:surface:budget:)`과 동일하게 첫 결함에서
-  /// 즉시 멈춘다.
+  /// 2단 행 판정 (스크리닝 → 확정): `budget.perCase` 안에 끝나지 않은 작업을 즉시 결함으로
+  /// 단정하지 않고, `budget.confirmation` 예산으로 `operation`을 1회 재실행해 재차 초과할
+  /// 때만 `.timedOut`으로 확정한다. 진짜 행은 어떤 예산에서도 완주하지 못하므로 항상
+  /// 재초과한다 — 탐지력 손실 없이, 공유 CI 러너 시작 버스트의 CPU 기아로 인한 거짓 양성만
+  /// 걸러진다 (2026-08-13 PR #22 run 31670003395 실측: 동일 커밋 attempt 2 통과).
+  ///
+  /// `operation`은 재호출 가능해야 한다 — 표면 실행은 호출마다 독립 문서를 새로 열므로 이
+  /// 요건을 자명하게 만족한다. 상위 태스크가 이미 취소됐으면 확정을 생략하고 스크리닝 결과를
+  /// 그대로 반환한다(취소된 런의 결과는 어차피 수집되지 않는다 — `run`의 중단 규약).
   /// - Parameters:
-  ///   - delays: 케이스별 인위적 처리 시간(도착 순서대로 소비).
+  ///   - budget: 스크리닝(`perCase`)·확정(`confirmation`) 예산. `width`는 사용하지 않는다.
+  ///   - surfaceLabel: 초과 시 결함 설명에 남길 표면 이름.
+  ///   - operation: 예산 안에서 완주해야 할 작업 (재호출 가능해야 한다).
+  /// - Returns: 확정된 판정 — 스크리닝 통과 또는 확정 재실행 완주는 `.completed`,
+  ///   두 번 모두 초과하면 `.timedOut`.
+  static func withConfirmedTimeout(
+    _ budget: FuzzBudget, surfaceLabel: String,
+    operation: @escaping @Sendable () async -> Void
+  ) async -> FuzzOutcome {
+    let screening = await Self.withTimeout(
+      budget.perCase, surfaceLabel: surfaceLabel, operation: operation
+    )
+    guard case .timedOut = screening, !Task.isCancelled else {
+      return screening
+    }
+    let confirmed = await Self.withTimeout(
+      budget.confirmation, surfaceLabel: surfaceLabel, operation: operation
+    )
+    if confirmed == .completed {
+      print(
+        "[fuzz] 일시 초과 구제: \(surfaceLabel)"
+          + " (screening=\(budget.perCase), confirmation=\(budget.confirmation))"
+      )
+    }
+    return confirmed
+  }
+
+  /// 케이스 표면 실행 클로저 — 스크리닝과 확정 재실행에서 각각 재호출될 수 있다.
+  typealias FuzzOperation = @Sendable () async -> Void
+
+  /// 테스트 전용 훅 (테스트 포인트 6) — 실제 문서 파싱 대신 인위적 작업들로 2단 판정·즉시
+  /// 중단 경로를 검증한다. `run(cases:surface:budget:)`과 동일하게 첫 확정 결함에서 즉시
+  /// 멈춘다.
+  /// - Parameters:
+  ///   - operations: 케이스별 인위적 작업 (도착 순서대로 소비, 판정 단계마다 재호출될 수 있다).
   ///   - budget: 케이스별 예산 + 병렬 폭.
-  /// - Returns: 타임아웃으로 판정된 케이스 수 (0 또는 1 — 첫 결함에서 멈추므로).
-  static func runArtificialDelaysForTesting(
-    _ delays: [Duration], budget: FuzzBudget
+  /// - Returns: 행으로 확정된 케이스 수 (0 또는 1 — 첫 확정 결함에서 멈추므로).
+  static func runArtificialCasesForTesting(
+    _ operations: [FuzzOperation], budget: FuzzBudget
   ) async -> Int {
-    var iterator = delays.makeIterator()
+    var iterator = operations.makeIterator()
     var timedOutCount = 0
 
     await withTaskGroup(of: FuzzOutcome.self) { group in
       var inFlight = 0
       func addNext() {
-        guard let delay = iterator.next() else {
+        guard let operation = iterator.next() else {
           return
         }
         inFlight += 1
         group.addTask {
-          await Self.withTimeout(budget.perCase, surfaceLabel: "test-delay") {
-            try? await Task.sleep(for: delay)
-          }
+          await Self.withConfirmedTimeout(
+            budget, surfaceLabel: "test-operation", operation: operation
+          )
         }
       }
 
