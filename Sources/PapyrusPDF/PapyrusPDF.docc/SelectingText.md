@@ -117,6 +117,13 @@ model.setSelectableRegions(
 오버레이·메뉴 파이프라인을 공유하며, 텍스트 선택과는 상호 배타입니다(하나를
 선택하면 다른 하나는 자동으로 해제됩니다).
 
+영역이 선택되면 `selectedRegion`과 같은 통지에서 `selectedRegionAnchor`에 그
+영역의 앵커 사각형이 함께 실립니다. 좌표계는 `PapyrusPDFReader`가 차지한 뷰의
+좌표계라, SwiftUI `popover(attachmentAnchor:)` 같은 API에 변환 없이 그대로 쓸 수
+있습니다. 값은 **선택 순간의 스냅숏**이며 이후 스크롤·줌을 따라 갱신되지
+않습니다 — 선택이 해제되거나 텍스트 선택으로 전환되면 `selectedRegion`과 함께
+`nil`이 됩니다.
+
 quad는 PDF 페이지 공간 좌표입니다. 축 정렬 사각형이면 `Quad(rect:)` 편의
 이니셜라이저로 간단히 만들 수 있습니다. 겹치는 영역이 있으면 나중에 등록된(배열
 뒤쪽) 영역이 우선합니다 — 등록 순서가 곧 z-순서입니다.

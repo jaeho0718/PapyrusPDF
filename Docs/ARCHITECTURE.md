@@ -18,6 +18,9 @@ PapyrusPDF는 macOS 15+ / iPadOS 18+ / iOS 18+ 용 Swift 패키지로, 수천 �
   접근성·문서 전체 선택은 계속 제외.
 - 0.2.0 개칭: 패키지·저장소·모듈·공개 심볼 접두사를 Papyrus → PapyrusPDF로 전면 변경
   (하위 호환 typealias 없음, 무접두사 공개 타입은 유지).
+- 0.3.0 범위: 선택 영역 화면 앵커 — `PapyrusPDFReaderModel.selectedRegionAnchor`
+  (선택 순간의 리더 뷰 좌표 스냅숏, 스크롤·줌 추적 아님)를 `selectedRegion`과 같은
+  통지에서 노출. 가산 API뿐(semver minor). 영역 hover 보고는 범위 밖(후속).
 
 ## 타겟 구조
 
@@ -78,7 +81,7 @@ Sources/
     macOS/      ReaderScrollView_macOS.swift, SelectionInput_macOS.swift,
                 MenuPresenter_macOS.swift + NSViewRepresentable
     SelectionMenu.swift, SelectableRegion.swift, Highlight.swift,
-    PapyrusPDFReader.swift, PapyrusPDFReaderModel.swift(+Highlights)
+    PapyrusPDFReader.swift, PapyrusPDFReaderModel.swift(+Highlights/+Types)
   PapyrusPDF/      PapyrusPDF.swift (@_exported)
 ```
 
@@ -231,6 +234,7 @@ public final class PapyrusPDFReaderModel {
 //         ReaderLoadState(loading/ready/failed)
 // PapyrusPDFReaderModel 추가 멤버:
 //   selection: TextSelection? / selectedRegion: SelectableRegion?
+//   selectedRegionAnchor: CGRect? (0.3.0 — 선택 순간의 리더 뷰 좌표 스냅숏)
 //   select(_:), clearSelection(), selectedString() async
 //   setSelectableRegions(_:forPage:), selectableRegions(forPage:),
 //   clearSelectableRegions()
