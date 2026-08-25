@@ -84,8 +84,10 @@ package final class ReaderCore: ReaderHostEventSink {
   /// 선택 변경 통지 (모델이 구독).
   package var onSelectionChange: ((TextSelection?) -> Void)?
 
-  /// 영역 선택 변경 통지 (모델이 구독).
-  package var onRegionSelectionChange: ((SelectableRegion?) -> Void)?
+  /// 영역 선택 변경 통지 (모델이 구독). 두 번째 인자는 선택 순간의 리더 뷰 좌표 앵커
+  /// 사각형 — 영역과 **같은 통지**에 실어 모델의 `selectedRegion`·`selectedRegionAnchor`
+  /// 짝이 항상 한 턴에 함께 선다 (해제·미부착·변환 미보유면 `nil`).
+  package var onRegionSelectionChange: ((SelectableRegion?, CGRect?) -> Void)?
 
   /// 페이지 → 하이라이트 mirror (모델이 diff 통지로 채운다 — attach 재생 포함).
   /// 페이지 공간 quad 그대로 보관하고 표시 변환은 반영 시점에 적용한다.
@@ -151,7 +153,10 @@ package final class ReaderCore: ReaderHostEventSink {
       self?.updateMenuTextCache(for: selection)
     }
     selectionController?.onRegionSelectionChange = { [weak self] region in
-      self?.onRegionSelectionChange?(region)
+      guard let self else {
+        return
+      }
+      self.onRegionSelectionChange?(region, self.regionAnchorRect(for: region))
     }
     selectionController?.onOverlayInvalidate = { [weak self] pageIndex in
       self?.applySelection(toPage: pageIndex)

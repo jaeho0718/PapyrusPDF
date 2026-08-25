@@ -296,6 +296,32 @@ extension ReaderCore {
     self.selectionController?.clearAllRegions()
   }
 
+  /// 선택된 영역의 리더 뷰 좌표 앵커 사각형 — 선택 통지 시점의 스냅숏 계산.
+  ///
+  /// 표시 quad(`menuAnchorRect` — 영역 선택 상태에서는 변환된 영역 quad)를 페이지
+  /// 프레임으로 콘텐츠 공간에 올린 뒤, 호스트의 가시 원점·줌으로 뷰 좌표로 내린다.
+  /// 컨트롤러 상태가 이 영역의 `regionSelected`인 통지 경로 안에서만 부른다 —
+  /// 모든 `notifyRegion` 발화 지점이 상태 전이 **뒤**라는 기존 불변식에 기댄다.
+  /// - Parameter region: 통지된 영역 (해제 통지면 `nil`).
+  /// - Returns: 리더 뷰 좌표 앵커, 해제·미부착·변환 미보유면 `nil`.
+  func regionAnchorRect(for region: SelectableRegion?) -> CGRect? {
+    guard let region, let host = self.host,
+      let displayRect = self.selectionController?.menuAnchorRect(forPage: region.pageIndex),
+      let frame = self.layout.pageFrame(at: region.pageIndex)
+    else {
+      return nil
+    }
+    let contentRect = displayRect.offsetBy(dx: frame.minX, dy: frame.minY)
+    let zoom = host.zoomScale
+    let visibleOrigin = host.visibleContentRect.origin
+    return CGRect(
+      x: (contentRect.minX - visibleOrigin.x) * zoom,
+      y: (contentRect.minY - visibleOrigin.y) * zoom,
+      width: contentRect.width * zoom,
+      height: contentRect.height * zoom
+    )
+  }
+
   /// 현재 선택된 영역 스냅숏 (attach 직후 모델 동기화용).
   /// - Returns: 활성 영역 선택, 없으면 `nil`.
   package func selectedRegionSnapshot() -> SelectableRegion? {
