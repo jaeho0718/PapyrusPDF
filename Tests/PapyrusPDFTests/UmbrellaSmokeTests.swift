@@ -7,8 +7,10 @@ import Testing
 struct UmbrellaSmokeTests {
   /// S1: `import PapyrusPDF`만으로 `PapyrusPDFCore`를 직접 import하지 않고도
   /// `PapyrusPDFVersion.current`에 접근할 수 있어야 한다 (`@_exported` 재수출 배선).
+  /// 값은 버전 비의존으로 semver 형태만 단언한다 — 리터럴 핀은 릴리스마다 썩는다
+  /// (0.2.0에서 실증).
   @Test func papyrusPDFVersionIsExportedThroughUmbrella() {
-    #expect(PapyrusPDFVersion.current == "0.1.0")
+    #expect(PapyrusPDFVersion.current.wholeMatch(of: /\d+\.\d+\.\d+/) != nil)
   }
 
   /// S2: `PapyrusPDFRendering`/`PapyrusPDFUI`가 실제로 빌드·링크되어 시드 마커에 접근할 수 있다.
