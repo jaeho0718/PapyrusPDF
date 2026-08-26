@@ -208,8 +208,8 @@ extension TextAssembler {
     let effectiveFontSize: CGFloat
   }
 
-  /// run 사이 간격이 공백 삽입 허용치(0.25 × min(effFontSize), 양쪽 run 중 작은 값)를
-  /// 넘는지 판정한다.
+  /// run 사이 간격이 공백 삽입 허용치(spaceGapFactor × min(effFontSize), 양쪽 run 중 작은
+  /// 값)를 넘는지 판정한다.
   private static func shouldInsertSpace(
     after previous: PreviousRunEnd, before run: RawGlyphRun
   ) -> Bool {
@@ -217,7 +217,7 @@ extension TextAssembler {
     let startProjection = run.origin.x * direction.dx + run.origin.y * direction.dy
     let endProjection = previous.point.x * direction.dx + previous.point.y * direction.dy
     let gap = startProjection - endProjection
-    let tolerance = 0.25 * min(run.effectiveFontSize, previous.effectiveFontSize)
+    let tolerance = Self.spaceGapFactor * min(run.effectiveFontSize, previous.effectiveFontSize)
     return gap > tolerance
   }
 }
