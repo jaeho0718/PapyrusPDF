@@ -75,6 +75,7 @@ struct DeepFuzzTests {
 
     var findingDescriptions: [String] = []
     var rng = SplitMix64(seed: config.rootSeed ^ Self.corpusSalt)
+    let budget = FuzzBudget(perCase: config.timeout)
     fileLoop: for file in files where file.pathExtension.lowercased() == "pdf" {
       guard let raw = try? Data(contentsOf: file) else {
         continue
@@ -87,12 +88,12 @@ struct DeepFuzzTests {
           : FuzzMutator.mutate(raw, seed: mutationSeed, count: mutationCount)
         let description =
           "file=\(file.lastPathComponent) mut=0x\(Self.hex(mutationSeed)) n=\(mutationCount)"
-        let outcome = await FuzzExecutor.withTimeout(config.timeout, surfaceLabel: description) {
+        let outcome = await FuzzExecutor.withConfirmedTimeout(budget, surfaceLabel: description) {
           await FuzzExecutor.execute(surface: .openOnly, input: input)
         }
         if case .timedOut = outcome {
           findingDescriptions.append(description)
-          break fileLoop // 첫 결함에서 즉시 중단 (설계 가정 3과 일관).
+          break fileLoop // 첫 확정 결함에서 즉시 중단 (설계 가정 3과 일관).
         }
       }
     }
@@ -153,7 +154,7 @@ struct DeepFuzzConfiguration {
   let openCases: Int
   /// `.full` 케이스 수 (기본 20,000).
   let fullCases: Int
-  /// 케이스 1개 타임아웃 (기본 2,000ms).
+  /// 케이스 1개 스크리닝 타임아웃 (기본 2,000ms — 확정 재실행은 4배).
   let timeout: Duration
   /// 실PDF 코퍼스 디렉터리 (선택 — 설계 가정 4).
   let corpusDir: URL?
