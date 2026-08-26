@@ -24,7 +24,7 @@ extension SelectionGeometry {
       return 0
     }
 
-    let line = self.lines[self.nearestLineIndex(forY: point.y)]
+    let line = self.lines[self.nearestLineIndex(for: point)]
     let projection = Self.dot(point, line.axis)
     if projection <= line.minProjection {
       return line.textRange.lowerBound
@@ -44,16 +44,17 @@ extension SelectionGeometry {
     return TextBoundary.snapToCharacterBoundary(offset, in: self.content.string)
   }
 
-  /// `visualOrder`에서 band 중점 기준 `y`의 삽입점을 이진 탐색하고, 이웃 창 안에서
-  /// 밴드 거리 최소 라인을 고른다 (동률은 텍스트 순서 앞 라인 — 결정성).
-  private func nearestLineIndex(forY y: CGFloat) -> Int {
+  /// `visualOrder`에서 밴드 중점 기준 `y` 삽입점을 이진 탐색하고, 이웃 창 안에서
+  /// "밴드 밖 y 거리 + 축 투영 구간 밖 거리"가 최소인 라인을 고른다 (동률은 텍스트 순서
+  /// 앞 라인). 같은 y에 열별 라인이 여럿일 때 x가 맞는 열을 고르기 위한 2차원 거리다.
+  private func nearestLineIndex(for point: CGPoint) -> Int {
     var low = 0
     var high = self.visualOrder.count
     while low < high {
       let mid = (low + high) / 2
       let band = self.lines[self.visualOrder[mid]].band
       let midY = (band.lowerBound + band.upperBound) / 2
-      if midY < y {
+      if midY < point.y {
         low = mid + 1
       } else {
         high = mid
@@ -66,14 +67,27 @@ extension SelectionGeometry {
     var bestDistance = CGFloat.greatestFiniteMagnitude
     for windowIndex in windowStart..<windowEnd {
       let lineIndex = self.visualOrder[windowIndex]
-      let band = self.lines[lineIndex].band
-      let distance = band.contains(y) ? 0 : min(abs(y - band.lowerBound), abs(y - band.upperBound))
+      let distance = self.hitDistance(from: point, to: self.lines[lineIndex])
       if distance < bestDistance || (distance == bestDistance && lineIndex < best) {
         bestDistance = distance
         best = lineIndex
       }
     }
     return best
+  }
+
+  // ponytail: 밴드는 표시 y 전용 — 회전 페이지의 라인 간 구분은 기존과 같이 미지원.
+  // 필요 시 Line에 normalRange를 추가해 밴드 거리를 대체한다.
+  /// 점 → 라인의 2차원 히트 거리 (밴드 밖 y 거리 + 라인 축 투영 구간 밖 거리).
+  private func hitDistance(from point: CGPoint, to line: Line) -> CGFloat {
+    let band = line.band
+    let bandDistance = band.contains(point.y)
+      ? 0 : min(abs(point.y - band.lowerBound), abs(point.y - band.upperBound))
+    let projection = Self.dot(point, line.axis)
+    let projectionDistance = max(
+      0, line.minProjection - projection, projection - line.maxProjection
+    )
+    return bandDistance + projectionDistance
   }
 
   /// 라인 내 run들을 선형 스캔해 투영 구간 거리(안이면 0) 최소 run을 고른다

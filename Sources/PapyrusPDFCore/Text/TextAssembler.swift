@@ -43,8 +43,9 @@ package enum TextAssembler {
 // MARK: - 내부 타입
 
 extension TextAssembler {
-  /// 원본 인덱스를 보존한 run 하나.
-  private struct RunEntry {
+  /// 원본 인덱스를 보존한 run 하나. `TextAssembler+Columns.swift`(다단 읽기 순서)도
+  /// 접근하므로 internal이다.
+  struct RunEntry {
     let originalIndex: Int
     let run: RawGlyphRun
   }
@@ -81,7 +82,7 @@ extension TextAssembler {
 
     var lines: [[RunEntry]] = []
     for key in sortedClasses {
-      lines.append(contentsOf: Self.clusterLines(byClass[key] ?? []))
+      lines.append(contentsOf: Self.orderByColumns(Self.clusterLines(byClass[key] ?? [])))
     }
     return lines
   }

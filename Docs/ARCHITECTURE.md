@@ -126,7 +126,7 @@ Sources/
 2. 폰트 로딩: **ToUnicode 최우선** → 단순 폰트는 기본 인코딩(+/Differences) + AGL 서브셋 테이블 → Type0/CID는 Identity-H/V + 임베디드 CMap만 지원. 사전정의 CJK CMap(UniJIS 등)은 v1 제외 — 위치는 유지한 채 U+FFFD run으로 표시(하이라이트는 동작).
 3. `ContentStreamInterpreter`: 그래픽 상태(q/Q/cm) + 텍스트 상태(BT/ET, Tf, Td/TD/Tm/T*, Tc/Tw/Tz/TL/Ts) + 표시 연산자(Tj/TJ/'/") 해석. Form XObject 재귀(깊이 캡 16). Tr 3(투명 텍스트, OCR 레이어)는 포함하되 `isInvisible` 태그.
 4. 지오메트리: run별 원점 + advance 배열 + ascent/descent 박스 → PDF 페이지 공간 quad. 문자별 rect 저장 대신 run + advances로 파생.
-5. `TextAssembler`: 베이스라인 정렬 → 간격 휴리스틱으로 공백/줄바꿈 삽입 → `PageTextContent`(페이지 문자열 + run들).
+5. `TextAssembler`: 베이스라인 정렬 → **다단 읽기 순서(폭 건전성 게이트 → 클래스 단위 거터 탐지 → 구분선/넘침 분류 → 열 → 행)** → 간격 휴리스틱으로 공백/줄바꿈 삽입 → `PageTextContent`(페이지 문자열 + run들).
 
 캐싱: 페이지별 결과를 바이트 예산 LRU에. 추출은 순수 함수 → TaskGroup 병렬화 (검색 워밍업 경로).
 
