@@ -24,8 +24,8 @@ struct TextAssemblerTests {
 
   /// TA1 회귀(리뷰 should #1): 공백 삽입 임계값은 새 run만이 아니라 "두 run 중 작은
   /// effFontSize"를 써야 한다(설계 §3.7 5항목). 직전 run은 작은 폰트(4), 다음 run은
-  /// 큰 폰트(100) — 새 run 크기만 쓰면 gap(10)이 허용치(25) 이내라 공백이 빠지지만,
-  /// 두 run의 최솟값(4)을 쓰면 허용치(1)를 넘어 공백이 들어가야 한다.
+  /// 큰 폰트(100) — 새 run 크기만 쓰면 gap(10)이 허용치(15) 이내라 공백이 빠지지만,
+  /// 두 run의 최솟값(4)을 쓰면 허용치(0.6)를 넘어 공백이 들어가야 한다.
   @Test func spaceThresholdUsesSmallerOfBothRunFontSizes() {
     let runA = Self.makeRun(
       text: "AB", origin: CGPoint(x: 0, y: 700), effectiveFontSize: 4, advanceStep: 8
@@ -35,6 +35,23 @@ struct TextAssemblerTests {
     )
     let content = TextAssembler.assemble([runA, runB], pageIndex: 0)
     #expect(content.string == "AB CD")
+  }
+
+  // MARK: TS1 — 공백 허용치(spaceGapFactor 0.15em) 경계
+
+  @Test func spaceGapFactorBoundaryInsertsOnlyAboveThreshold() {
+    // 1em = fontSize(12) → spaceGapFactor(0.15) × 12 = 1.8pt가 삽입 경계.
+    let beforeInserted = Self.makeRun(text: "AB", origin: CGPoint(x: 0, y: 700))
+    let afterInserted = Self.makeRun(text: "CD", origin: CGPoint(x: 18.4, y: 700))
+    // gap = 18.4 - 16 = 2.4 = 0.2em > 1.8pt → 공백 삽입.
+    let inserted = TextAssembler.assemble([beforeInserted, afterInserted], pageIndex: 0)
+    #expect(inserted.string == "AB CD")
+
+    let beforeSkipped = Self.makeRun(text: "AB", origin: CGPoint(x: 0, y: 700))
+    let afterSkipped = Self.makeRun(text: "CD", origin: CGPoint(x: 17.2, y: 700))
+    // gap = 17.2 - 16 = 1.2 = 0.1em ≤ 1.8pt → 공백 없음.
+    let skipped = TextAssembler.assemble([beforeSkipped, afterSkipped], pageIndex: 0)
+    #expect(skipped.string == "ABCD")
   }
 
   // MARK: TA3 — 두 라인, "\n" 삽입, 위 라인 먼저

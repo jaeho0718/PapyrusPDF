@@ -43,8 +43,9 @@ package enum TextAssembler {
 // MARK: - 내부 타입
 
 extension TextAssembler {
-  /// 원본 인덱스를 보존한 run 하나.
-  private struct RunEntry {
+  /// 원본 인덱스를 보존한 run 하나. `TextAssembler+Columns.swift`(다단 읽기 순서)도
+  /// 접근하므로 internal이다.
+  struct RunEntry {
     let originalIndex: Int
     let run: RawGlyphRun
   }
@@ -81,7 +82,7 @@ extension TextAssembler {
 
     var lines: [[RunEntry]] = []
     for key in sortedClasses {
-      lines.append(contentsOf: Self.clusterLines(byClass[key] ?? []))
+      lines.append(contentsOf: Self.orderByColumns(Self.clusterLines(byClass[key] ?? [])))
     }
     return lines
   }
@@ -207,8 +208,8 @@ extension TextAssembler {
     let effectiveFontSize: CGFloat
   }
 
-  /// run 사이 간격이 공백 삽입 허용치(0.25 × min(effFontSize), 양쪽 run 중 작은 값)를
-  /// 넘는지 판정한다.
+  /// run 사이 간격이 공백 삽입 허용치(spaceGapFactor × min(effFontSize), 양쪽 run 중 작은
+  /// 값)를 넘는지 판정한다.
   private static func shouldInsertSpace(
     after previous: PreviousRunEnd, before run: RawGlyphRun
   ) -> Bool {
@@ -216,7 +217,7 @@ extension TextAssembler {
     let startProjection = run.origin.x * direction.dx + run.origin.y * direction.dy
     let endProjection = previous.point.x * direction.dx + previous.point.y * direction.dy
     let gap = startProjection - endProjection
-    let tolerance = 0.25 * min(run.effectiveFontSize, previous.effectiveFontSize)
+    let tolerance = Self.spaceGapFactor * min(run.effectiveFontSize, previous.effectiveFontSize)
     return gap > tolerance
   }
 }
